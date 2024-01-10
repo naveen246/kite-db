@@ -1,0 +1,9 @@
+.idea
+bin/kite
+bin/kite-maelstrom
+.DS_Store
+**/*.toolbox
+data
+vendor/
+zz_generated.deepcopy.go
+pkg/generated/
