@@ -1,6 +1,5 @@
 .idea
-bin/kite
-bin/kite-maelstrom
+bin/
 .DS_Store
 **/*.toolbox
 data
