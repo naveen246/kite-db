@@ -1,6 +1,6 @@
 .PHONY: build
 build:
-	go build -v -o bin/kite ./cmd
+	go build -v -o bin/kite ./server
 
 test: build
 	go test -cover -race ./...
