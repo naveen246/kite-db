@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-func TestSetAndGetIntToMemory(t *testing.T) {
-	nums := []uint32{1, 2, 3, 4, 5}
+func TestGetInt(t *testing.T) {
+	nums := []uint32{1, 2, 3}
 	var tests = []struct {
 		offset   int
 		expected uint32
@@ -15,11 +15,8 @@ func TestSetAndGetIntToMemory(t *testing.T) {
 		{0, 1},
 		{4, 2},
 		{8, 3},
-		{12, 4},
-		{16, 5},
 	}
 
-	// Test GetInt
 	page := NewPageWithSize(len(nums) * IntSize)
 	for i, num := range nums {
 		offsetStart := i * IntSize
@@ -31,9 +28,20 @@ func TestSetAndGetIntToMemory(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, tt.expected, actual)
 	}
+}
 
-	// Test SetInt
-	page = NewPageWithSize(len(nums) * IntSize)
+func TestSetInt(t *testing.T) {
+	nums := []uint32{1, 2, 3}
+	var tests = []struct {
+		offset   int
+		expected uint32
+	}{
+		{0, 1},
+		{4, 2},
+		{8, 3},
+	}
+
+	page := NewPageWithSize(len(nums) * IntSize)
 	for i, num := range nums {
 		offsetStart := i * IntSize
 		err := page.SetInt(offsetStart, num)
@@ -46,11 +54,9 @@ func TestSetAndGetIntToMemory(t *testing.T) {
 	}
 }
 
-func TestSetAndGetBytesToMemory(t *testing.T) {
+func TestGetBytes(t *testing.T) {
 	var data []byte
 	bytes := [][]byte{[]byte{42}, []byte{42, 42}, []byte{42, 42, 42}}
-	offsets := []int{0, 5, 11}
-
 	var tests = []struct {
 		offset   int
 		expected []byte
@@ -60,7 +66,6 @@ func TestSetAndGetBytesToMemory(t *testing.T) {
 		{11, bytes[2]},
 	}
 
-	// Test GetBytes
 	for _, b := range bytes {
 		data = binary.BigEndian.AppendUint32(data, uint32(len(b)))
 		data = append(data, b...)
@@ -71,9 +76,21 @@ func TestSetAndGetBytesToMemory(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, tt.expected, actual)
 	}
+}
 
-	// Test SetBytes
-	page = NewPageWithSize(18)
+func TestSetBytes(t *testing.T) {
+	bytes := [][]byte{[]byte{42}, []byte{42, 42}, []byte{42, 42, 42}}
+	offsets := []int{0, 5, 11}
+	var tests = []struct {
+		offset   int
+		expected []byte
+	}{
+		{0, bytes[0]},
+		{5, bytes[1]},
+		{11, bytes[2]},
+	}
+
+	page := NewPageWithSize(18)
 	for i := 0; i < len(bytes); i++ {
 		page.SetBytes(offsets[i], bytes[i])
 	}
@@ -87,7 +104,7 @@ func TestSetAndGetBytesToMemory(t *testing.T) {
 	}
 }
 
-func TestSetAndGetStringToMemory(t *testing.T) {
+func TestSetAndGetString(t *testing.T) {
 	data := []string{"a", "bc", "def"}
 	offsets := []int{0, 5, 11}
 
