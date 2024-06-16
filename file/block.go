@@ -7,8 +7,8 @@ type Block struct {
 	Number   int
 }
 
-func NewBlock(fileName string, blockNum int) *Block {
-	return &Block{fileName, blockNum}
+func GetBlock(fileName string, blockNum int) Block {
+	return Block{fileName, blockNum}
 }
 
 func (b Block) String() string {

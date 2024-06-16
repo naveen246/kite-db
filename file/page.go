@@ -73,9 +73,7 @@ func (p *Page) SetBytes(offset int, b []byte) error {
 	if err != nil {
 		return err
 	}
-	for i := range b {
-		p.Buffer[offsetStart+i] = b[i]
-	}
+	copy(p.Buffer[offsetStart:], b[:])
 	return nil
 }
 
