@@ -4,10 +4,10 @@ import "fmt"
 
 type Block struct {
 	Filename string
-	Number   int
+	Number   uint32
 }
 
-func GetBlock(fileName string, blockNum int) Block {
+func GetBlock(fileName string, blockNum uint32) Block {
 	return Block{fileName, blockNum}
 }
 

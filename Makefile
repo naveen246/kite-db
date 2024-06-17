@@ -5,9 +5,13 @@ build:
 test: build
 	go test -cover -race ./...
 
+test_coverage:
+	go test -coverprofile=coverage.out ./...; \
+    go tool cover -html="coverage.out"
+
 lint:
-	#brew install golangci-lint
 	golangci-lint run
 
 clean:
+	go clean
 	rm -rf bin/

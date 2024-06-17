@@ -2,7 +2,6 @@ package file
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/stretchr/testify/assert"
 	"log"
 	"os"
@@ -15,11 +14,10 @@ var tempFileName = "temp_file"
 
 // setup creates file temp_dir/filename
 // and populates file with 100 bytes each of a, b, c
-func setup(filename string) (*os.File, *FileMgr) {
+func setup(filename string) (*os.File, FileMgr) {
 	fileMgr := NewFileMgr("temp_dir", blockTestSize)
-	file, err := os.Create(fileMgr.dbFilePath(filename))
+	file, err := os.Create(fileMgr.DbFilePath(filename))
 	if err != nil {
-		fmt.Println("file create error")
 		log.Fatal(err)
 	}
 	chars := []byte("abc")
@@ -29,19 +27,18 @@ func setup(filename string) (*os.File, *FileMgr) {
 	return file, fileMgr
 }
 
-func teardown(file *os.File, fileMgr *FileMgr) {
+func teardown(file *os.File, fileMgr FileMgr) {
 	file.Close()
 	os.Remove(file.Name())
-	os.Remove(fileMgr.dbDir)
+	os.Remove(fileMgr.DbDir)
 }
 
 func TestFileRead(t *testing.T) {
 	file, fileMgr := setup(tempFileName)
-	fmt.Println("setup done")
 	defer teardown(file, fileMgr)
 
 	tests := []struct {
-		blockNum int
+		blockNum uint32
 		char     string
 	}{
 		{0, "a"},
@@ -91,9 +88,9 @@ func TestBlockCount(t *testing.T) {
 	file, fileMgr := setup(tempFileName)
 	defer teardown(file, fileMgr)
 
-	assert.Equal(t, 3, fileMgr.BlockCount(tempFileName))
+	assert.Equal(t, uint32(3), fileMgr.BlockCount(tempFileName))
 
 	newTempFile := "new_temp_file"
-	assert.Equal(t, 0, fileMgr.BlockCount(newTempFile))
-	os.Remove(fileMgr.dbFilePath(newTempFile))
+	assert.Equal(t, uint32(0), fileMgr.BlockCount(newTempFile))
+	os.Remove(fileMgr.DbFilePath(newTempFile))
 }
