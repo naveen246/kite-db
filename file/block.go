@@ -4,11 +4,11 @@ import "fmt"
 
 type Block struct {
 	Filename string
-	Number   int
+	Number   uint32
 }
 
-func NewBlock(fileName string, blockNum int) *Block {
-	return &Block{fileName, blockNum}
+func GetBlock(fileName string, blockNum uint32) Block {
+	return Block{fileName, blockNum}
 }
 
 func (b Block) String() string {

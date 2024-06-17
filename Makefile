@@ -1,13 +1,23 @@
+fmt:
+	go fmt ./...
+
+vet:
+	go vet ./...
+
 .PHONY: build
-build:
-	go build -v -o bin/kite ./server
+build: fmt vet
+	go build -v -o bin/kitedb ./server
 
 test: build
 	go test -cover -race ./...
 
+test_coverage:
+	go test -coverprofile=coverage.out ./...; \
+    go tool cover -html="coverage.out"
+
 lint:
-	#brew install golangci-lint
 	golangci-lint run
 
 clean:
+	go clean
 	rm -rf bin/

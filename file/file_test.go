@@ -5,7 +5,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"log"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -15,10 +14,9 @@ var tempFileName = "temp_file"
 
 // setup creates file temp_dir/filename
 // and populates file with 100 bytes each of a, b, c
-func setup(filename string) (*os.File, *FileMgr) {
+func setup(filename string) (*os.File, FileMgr) {
 	fileMgr := NewFileMgr("temp_dir", blockTestSize)
-	path := filepath.Join(fileMgr.DBDir, filename)
-	file, err := os.Create(path)
+	file, err := os.Create(fileMgr.DbFilePath(filename))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -29,18 +27,18 @@ func setup(filename string) (*os.File, *FileMgr) {
 	return file, fileMgr
 }
 
-func teardown(file *os.File, fileMgr *FileMgr) {
+func teardown(file *os.File, fileMgr FileMgr) {
 	file.Close()
 	os.Remove(file.Name())
-	os.Remove(fileMgr.DBDir)
+	os.Remove(fileMgr.DbDir)
 }
 
-func TestFileMgrRead(t *testing.T) {
+func TestFileRead(t *testing.T) {
 	file, fileMgr := setup(tempFileName)
 	defer teardown(file, fileMgr)
 
 	tests := []struct {
-		blockNum int
+		blockNum uint32
 		char     string
 	}{
 		{0, "a"},
@@ -51,7 +49,7 @@ func TestFileMgrRead(t *testing.T) {
 	// verify that 1st file block has 100 bytes of "a", 2nd file block has 100 bytes of "b" and so on
 	page := NewPageWithSize(blockTestSize)
 	for _, tt := range tests {
-		block := NewBlock(tempFileName, tt.blockNum)
+		block := GetBlock(tempFileName, tt.blockNum)
 		fileMgr.Read(block, page)
 
 		expected := bytes.Repeat([]byte(tt.char), blockTestSize)
@@ -60,12 +58,12 @@ func TestFileMgrRead(t *testing.T) {
 
 }
 
-func TestFileMgrWrite(t *testing.T) {
+func TestFileWrite(t *testing.T) {
 	file, fileMgr := setup(tempFileName)
 	defer teardown(file, fileMgr)
 
 	// intially 2nd file block has 100 bytes of "b", Overwrite with 100 bytes of "o" and verify if its changed
-	block := NewBlock(tempFileName, 1)
+	block := GetBlock(tempFileName, 1)
 	expected := bytes.Repeat([]byte("o"), blockTestSize)
 	page := NewPageWithBytes(expected)
 	fileMgr.Write(block, page)
@@ -75,9 +73,24 @@ func TestFileMgrWrite(t *testing.T) {
 	assert.Equal(t, string(expected), string(actual))
 }
 
+func TestFileAppend(t *testing.T) {
+	file, fileMgr := setup(tempFileName)
+	defer teardown(file, fileMgr)
+
+	initialBlockCount := fileMgr.BlockCount(tempFileName)
+	fileMgr.Append(tempFileName)
+	expectedBlockCount := initialBlockCount + 1
+	actualBlockCount := fileMgr.BlockCount(tempFileName)
+	assert.Equal(t, expectedBlockCount, actualBlockCount)
+}
+
 func TestBlockCount(t *testing.T) {
 	file, fileMgr := setup(tempFileName)
 	defer teardown(file, fileMgr)
 
-	assert.Equal(t, 3, fileMgr.BlockCount(tempFileName))
+	assert.Equal(t, uint32(3), fileMgr.BlockCount(tempFileName))
+
+	newTempFile := "new_temp_file"
+	assert.Equal(t, uint32(0), fileMgr.BlockCount(newTempFile))
+	os.Remove(fileMgr.DbFilePath(newTempFile))
 }

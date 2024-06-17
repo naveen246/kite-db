@@ -1,6 +1,10 @@
 package file
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -8,21 +12,26 @@ import (
 // Files are conceptually divided into blocks of equal blockSize.
 // Each block in a file starts at offset - (Block.Number * FileMgr.BlockSize)
 
+const dirPermission = 0777
+const filePermission = 0666
+
+// FileMgr handles Read from file Block to memory(Page)
+// and Write from memory(Page) to a file Block
 type FileMgr struct {
-	DBDir     string
-	BlockSize int
+	DbDir     string
+	BlockSize uint32
 	IsNew     bool
 }
 
-func NewFileMgr(dbDir string, blockSize int) *FileMgr {
-	fileMgr := &FileMgr{
-		DBDir:     dbDir,
+func NewFileMgr(dbDir string, blockSize uint32) FileMgr {
+	fileMgr := FileMgr{
+		DbDir:     dbDir,
 		BlockSize: blockSize,
 		IsNew:     !pathExists(dbDir),
 	}
 
 	if fileMgr.IsNew {
-		err := os.Mkdir(dbDir, 0755)
+		err := os.Mkdir(dbDir, dirPermission)
 		if err != nil {
 			panic("Could not create DB directory")
 		}
@@ -33,9 +42,8 @@ func NewFileMgr(dbDir string, blockSize int) *FileMgr {
 }
 
 // Read a block from file to Page(memory)
-func (f *FileMgr) Read(block *Block, page *Page) error {
-	path := filepath.Join(f.DBDir, block.Filename)
-	file, err := os.Open(path)
+func (f *FileMgr) Read(block Block, page *Page) error {
+	file, err := os.Open(f.DbFilePath(block.Filename))
 	if err != nil {
 		return err
 	}
@@ -43,15 +51,15 @@ func (f *FileMgr) Read(block *Block, page *Page) error {
 
 	_, err = file.ReadAt(page.Buffer, int64(block.Number*f.BlockSize))
 	if err != nil {
-		return err
+		return fmt.Errorf("could not read block %v, %v", block, err)
 	}
 	return nil
 }
 
 // Write a Page(memory) to a block in file
-func (f *FileMgr) Write(block *Block, page *Page) error {
-	path := filepath.Join(f.DBDir, block.Filename)
-	file, err := os.OpenFile(path, os.O_RDWR, 0600)
+func (f *FileMgr) Write(block Block, page *Page) error {
+	path := f.DbFilePath(block.Filename)
+	file, err := os.OpenFile(path, os.O_RDWR, filePermission)
 	if err != nil {
 		return err
 	}
@@ -59,27 +67,54 @@ func (f *FileMgr) Write(block *Block, page *Page) error {
 
 	_, err = file.WriteAt(page.Buffer, int64(block.Number*f.BlockSize))
 	if err != nil {
-		return err
+		return fmt.Errorf("could not write to block %v, %v", block, err)
 	}
+	// TODO file.Sync() ??
 	return nil
 }
 
-func (f *FileMgr) Append(filename string) {
-	// TODO
+// Append empty bytes of size f.BlockSize to file
+// and create a new block that corresponds to the bytes appended to file
+func (f *FileMgr) Append(filename string) (Block, error) {
+	newBlockNum := f.BlockCount(filename)
+	block := GetBlock(filename, newBlockNum)
+	b := bytes.Repeat([]byte{byte(0)}, int(f.BlockSize))
+
+	file, err := os.OpenFile(f.DbFilePath(filename), os.O_APPEND|os.O_WRONLY|os.O_CREATE, filePermission)
+	if err != nil {
+		return Block{}, err
+	}
+	defer file.Close()
+
+	_, err = file.Write(b)
+	if err != nil {
+		return Block{}, err
+	}
+
+	return block, nil
 }
 
-func (f *FileMgr) BlockCount(filename string) int {
-	path := filepath.Join(f.DBDir, filename)
+func (f *FileMgr) BlockCount(filename string) uint32 {
+	path := f.DbFilePath(filename)
+
 	fileInfo, err := os.Stat(path)
-	if err != nil {
+	if errors.Is(err, os.ErrNotExist) {
+		if _, err := os.Create(path); err != nil {
+			log.Fatalf("Failed to create file %v, %v\n", path, err)
+		}
 		return 0
 	}
-	return int(fileInfo.Size() / int64(f.BlockSize))
+	if err != nil {
+		log.Fatalf("Failed to get BlockCount for %v, %v\n", filename, err)
+	}
+	return uint32(fileInfo.Size()) / f.BlockSize
+}
+
+func (f *FileMgr) DbFilePath(filename string) string {
+	return filepath.Join(f.DbDir, filename)
 }
 
 func pathExists(path string) bool {
-	if _, err := os.Stat(path); err == nil {
-		return true
-	}
-	return false
+	_, err := os.Stat(path)
+	return !errors.Is(err, os.ErrNotExist)
 }

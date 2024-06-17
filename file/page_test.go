@@ -9,7 +9,7 @@ import (
 func TestGetInt(t *testing.T) {
 	nums := []uint32{1, 2, 3}
 	var tests = []struct {
-		offset   int
+		offset   uint32
 		expected uint32
 	}{
 		{0, 1},
@@ -17,7 +17,7 @@ func TestGetInt(t *testing.T) {
 		{8, 3},
 	}
 
-	page := NewPageWithSize(len(nums) * IntSize)
+	page := NewPageWithSize(uint32(len(nums)) * IntSize)
 	for i, num := range nums {
 		offsetStart := i * IntSize
 		offsetEnd := offsetStart + IntSize
@@ -41,10 +41,10 @@ func TestSetInt(t *testing.T) {
 		{8, 3},
 	}
 
-	page := NewPageWithSize(len(nums) * IntSize)
+	page := NewPageWithSize(uint32(len(nums) * IntSize))
 	for i, num := range nums {
 		offsetStart := i * IntSize
-		err := page.SetInt(offsetStart, num)
+		err := page.SetInt(uint32(offsetStart), num)
 		assert.NoError(t, err)
 	}
 	for _, tt := range tests {
@@ -58,7 +58,7 @@ func TestGetBytes(t *testing.T) {
 	var data []byte
 	bytes := [][]byte{[]byte{42}, []byte{42, 42}, []byte{42, 42, 42}}
 	var tests = []struct {
-		offset   int
+		offset   uint32
 		expected []byte
 	}{
 		{0, bytes[0]},
@@ -80,7 +80,7 @@ func TestGetBytes(t *testing.T) {
 
 func TestSetBytes(t *testing.T) {
 	bytes := [][]byte{[]byte{42}, []byte{42, 42}, []byte{42, 42, 42}}
-	offsets := []int{0, 5, 11}
+	offsets := []uint32{0, 5, 11}
 	var tests = []struct {
 		offset   int
 		expected []byte
@@ -106,7 +106,7 @@ func TestSetBytes(t *testing.T) {
 
 func TestSetAndGetString(t *testing.T) {
 	data := []string{"a", "bc", "def"}
-	offsets := []int{0, 5, 11}
+	offsets := []uint32{0, 5, 11}
 
 	page := NewPageWithSize(18)
 	for i := 0; i < len(data); i++ {
