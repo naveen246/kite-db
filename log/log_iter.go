@@ -33,8 +33,8 @@ func (l *LogIterator) HasNext() bool {
 // then move to the previous block and return the latest log record from there.
 func (l *LogIterator) Next() []byte {
 	if l.currentPos >= l.fileMgr.BlockSize {
-		block := file.GetBlock(l.block.Filename, l.block.Number-1)
-		l.moveToBlock(block)
+		l.block = file.GetBlock(l.block.Filename, l.block.Number-1)
+		l.moveToBlock(l.block)
 	}
 
 	record, err := l.page.GetBytes(l.currentPos)

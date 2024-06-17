@@ -11,6 +11,7 @@ import (
 const blockTestSize uint32 = 20
 
 var tempFileName = "temp.log"
+var initialText = "abcdefghijkl"
 
 // setup creates file temp_dir/filename
 // and adds 1 logRecord which fills the complete first block in the file
@@ -23,7 +24,7 @@ func setup(filename string) file.FileMgr {
 
 	page := file.NewPageWithSize(blockTestSize)
 	page.SetInt(0, 4)
-	page.SetString(4, "aaaaaaaaaaaa")
+	page.SetString(4, initialText)
 	fileMgr.Write(file.GetBlock(tempFileName, 0), page)
 	return fileMgr
 }
@@ -106,4 +107,25 @@ func TestLogFlush(t *testing.T) {
 	logMgr.Flush(1)
 	assert.Equal(t, 1, logMgr.latestLogSeqNum)
 	assert.Equal(t, 1, logMgr.lastSavedLogSeqNum)
+}
+
+func TestLogIterator(t *testing.T) {
+	fileMgr := setup(tempFileName)
+	defer teardown(fileMgr.DbFilePath(tempFileName), fileMgr)
+	logMgr := NewLogMgr(fileMgr, tempFileName)
+
+	text := []string{"abcde", "fgh", "ijklmn", "opq"}
+	for _, t := range text {
+		logMgr.Append([]byte(t))
+	}
+
+	iter := logMgr.Iterator()
+	for i := 3; i >= 0; i-- {
+		assert.True(t, iter.HasNext())
+		assert.Equal(t, text[i], string(iter.Next()))
+	}
+
+	assert.True(t, iter.HasNext())
+	assert.Equal(t, initialText, string(iter.Next()))
+	assert.False(t, iter.HasNext())
 }

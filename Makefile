@@ -1,5 +1,11 @@
+fmt:
+	go fmt ./...
+
+vet:
+	go vet ./...
+
 .PHONY: build
-build:
+build: fmt vet
 	go build -v -o bin/kitedb ./server
 
 test: build
