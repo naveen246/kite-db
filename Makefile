@@ -6,7 +6,7 @@ vet:
 
 .PHONY: build
 build: fmt vet
-	go build -v -o bin/kitedb ./server
+	go build -v -o bin/kitedb ./cmd
 
 test: build
 	go test -cover -race ./...

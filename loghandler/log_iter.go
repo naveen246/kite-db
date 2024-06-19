@@ -10,7 +10,7 @@ type LogIterator struct {
 	fileMgr    file.FileMgr
 	block      file.Block
 	page       *file.Page
-	currentPos uint32
+	currentPos int64
 }
 
 func NewIterator(fileMgr file.FileMgr, block file.Block) *LogIterator {
@@ -41,7 +41,7 @@ func (l *LogIterator) Next() []byte {
 	if err != nil {
 		return nil
 	}
-	l.currentPos += uint32(len(record)) + file.IntSize
+	l.currentPos += int64(len(record)) + file.IntSize
 	return record
 }
 

@@ -31,15 +31,15 @@ This is because the dataSize for each item can vary
 There will be 1 logPage(in memory) which holds the data of the last block (Block 2 in above example)
 The block whose data is held in logPage is called currentBlock
 
-Below is an example of a block of size 30 bytes where we append "abc" first and "defgh" next
-The first 4 bytes of all blocks are reserved for the position/offset of the last added record in that block
+Below is an example of a block of size 40 bytes where we append "abc" first and "defgh" next
+The first 8 bytes of all blocks are reserved for the position/offset of the last added record in that block
 
 +===============+==========+==================+=============+=================+============+
 | lastRecordPos |  empty   | len(secondValue) | secondValue | len(firstValue) | firstValue |
 +===============+==========+==================+=============+=================+============+
 | 14            |          | 5                | defgh       | 3               | abc        |
 +---------------+----------+------------------+-------------+-----------------+------------+
-| 4 bytes       | 10 bytes | 4 bytes          | 5 bytes     | 4 bytes         | 3 bytes    |
+| 8 bytes       | 8 bytes  | 8 bytes          | 5 bytes     | 8 bytes         | 3 bytes    |
 +---------------+----------+------------------+-------------+-----------------+------------+
 
 */
@@ -110,7 +110,7 @@ func (l *LogMgr) Append(logRecord []byte) int {
 	}
 
 	// calculate new record position and write the record to logPage
-	recordPos := lastRecordPos - uint32(bytesNeeded)
+	recordPos := lastRecordPos - int64(bytesNeeded)
 	err = l.logPage.SetBytes(recordPos, logRecord)
 	if err != nil {
 		log.Fatalf("Failed to write Log record to page - %v\n", err)
@@ -135,15 +135,15 @@ func (l *LogMgr) appendNewBlock() file.Block {
 	return block
 }
 
-// The first 4 bytes of page holds the position of last written record
-func (l *LogMgr) saveLastRecordPos(pos uint32) {
+// The first 8 bytes of page holds the position of last written record
+func (l *LogMgr) saveLastRecordPos(pos int64) {
 	err := l.logPage.SetInt(0, pos)
 	if err != nil {
 		log.Fatalf("Failed to save last record position - %v", err)
 	}
 }
 
-func (l *LogMgr) lastRecordPos() (uint32, error) {
+func (l *LogMgr) lastRecordPos() (int64, error) {
 	lastRecordPos, err := l.logPage.GetInt(0)
 	if err != nil {
 		return 0, err

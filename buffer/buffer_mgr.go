@@ -29,6 +29,7 @@ func NewBufferMgr(fileMgr file.FileMgr, logMgr *loghandler.LogMgr, bufCount int)
 	return &BufferMgr{
 		prevUnpinnedBuffers: buffers,
 		numAvailable:        bufCount,
+		allocatedBuffers:    make(map[string]*Buffer),
 	}
 }
 
@@ -48,18 +49,18 @@ func (bm *BufferMgr) FlushAll(txNum int) {
 	}
 }
 
-func (bm *BufferMgr) UnpinBuffer(buffer Buffer) {
+func (bm *BufferMgr) UnpinBuffer(buffer *Buffer) {
 	bm.Lock()
 	defer bm.Unlock()
 	buffer.unpin()
 	if !buffer.isPinned() {
-		bm.prevUnpinnedBuffers = append(bm.prevUnpinnedBuffers, &buffer)
+		bm.prevUnpinnedBuffers = append(bm.prevUnpinnedBuffers, buffer)
 		bm.numAvailable++
 		// TODO notify ??
 	}
 }
 
-func (bm *BufferMgr) PinBufferToBlock(block file.Block) *Buffer {
+func (bm *BufferMgr) PinBuffer(block file.Block) *Buffer {
 	bm.Lock()
 	defer bm.Unlock()
 
@@ -68,7 +69,7 @@ func (bm *BufferMgr) PinBufferToBlock(block file.Block) *Buffer {
 	}
 
 	retries := 2
-	wait := 3 * time.Second
+	wait := 4 * time.Second
 	for i := 0; i < retries; i++ {
 		time.Sleep(wait)
 		wait *= 2

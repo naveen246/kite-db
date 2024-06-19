@@ -8,63 +8,66 @@ import (
 	"testing"
 )
 
-const blockTestSize uint32 = 20
+const blockTestSize int64 = 28
 
 var tempFileName = "temp.log"
 var initialText = "abcdefghijkl"
+var dbDir = "temp_dir"
 
-// setup creates file temp_dir/filename
+// createFile creates file temp_dir/filename
 // and adds 1 logRecord which fills the complete first block in the file
-func setup(filename string) file.FileMgr {
-	fileMgr := file.NewFileMgr("temp_dir", blockTestSize)
+func createFile(filename string) file.FileMgr {
+	fileMgr := file.NewFileMgr(dbDir, blockTestSize)
 	_, err := os.Create(fileMgr.DbFilePath(filename))
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	page := file.NewPageWithSize(blockTestSize)
-	page.SetInt(0, 4)
-	page.SetString(4, initialText)
+	page.SetInt(0, file.IntSize)
+	page.SetString(file.IntSize, initialText)
 	fileMgr.Write(file.GetBlock(tempFileName, 0), page)
 	return fileMgr
 }
 
-func teardown(filename string, fileMgr file.FileMgr) {
+func removeFile(filename string, dbDir string) {
 	os.Remove(filename)
-	os.Remove(fileMgr.DbDir)
+	os.Remove(dbDir)
 }
 
 func TestNewLogMgr(t *testing.T) {
-	fileMgr := file.NewFileMgr("temp_dir", blockTestSize)
+	fileMgr := file.NewFileMgr(dbDir, blockTestSize)
 	logMgr := NewLogMgr(fileMgr, tempFileName)
-	assert.Equal(t, uint32(0), logMgr.currentBlock.Number)
+	assert.Equal(t, int64(0), logMgr.currentBlock.Number)
 	assert.Equal(t, blockTestSize, logMgr.logPage.Size)
 	assert.Equal(t, tempFileName, logMgr.logFile)
-	teardown(fileMgr.DbFilePath(tempFileName), fileMgr)
+	removeFile(fileMgr.DbFilePath(tempFileName), fileMgr.DbDir)
 
-	fileMgr = setup(tempFileName)
+	fileMgr = createFile(tempFileName)
 	logMgr = NewLogMgr(fileMgr, tempFileName)
-	assert.Equal(t, uint32(0), logMgr.currentBlock.Number)
+	assert.Equal(t, int64(0), logMgr.currentBlock.Number)
 	assert.Equal(t, blockTestSize, logMgr.logPage.Size)
 	assert.Equal(t, tempFileName, logMgr.logFile)
-	teardown(fileMgr.DbFilePath(tempFileName), fileMgr)
+	removeFile(fileMgr.DbFilePath(tempFileName), fileMgr.DbDir)
 }
 
 func TestLogAppend(t *testing.T) {
-	fileMgr := setup(tempFileName)
-	defer teardown(fileMgr.DbFilePath(tempFileName), fileMgr)
+	fileMgr := createFile(tempFileName)
+	defer removeFile(fileMgr.DbFilePath(tempFileName), fileMgr.DbDir)
 	logMgr := NewLogMgr(fileMgr, tempFileName)
 
+	text := []string{"abcde", "fgh", "i", "opq"}
 	tests := []struct {
 		text       string
-		blockNum   uint32
-		lastRecPos uint32
+		blockNum   int64
+		lastRecPos int64
 		lsn        int
 	}{
-		{text: "abcde", blockNum: 1, lastRecPos: 11, lsn: 1},
-		{text: "fgh", blockNum: 1, lastRecPos: 4, lsn: 2},
-		{text: "ijklmn", blockNum: 2, lastRecPos: 10, lsn: 3},
-		{text: "opq", blockNum: 3, lastRecPos: 13, lsn: 4},
+		// TODO: These values depend on block size. Remove hardcoded values and calculate values
+		{text: text[0], blockNum: 1, lastRecPos: 15, lsn: 1},
+		{text: text[1], blockNum: 2, lastRecPos: 17, lsn: 2},
+		{text: text[2], blockNum: 2, lastRecPos: 8, lsn: 3},
+		{text: text[3], blockNum: 3, lastRecPos: 17, lsn: 4},
 	}
 
 	for _, tt := range tests {
@@ -81,8 +84,8 @@ func TestLogAppend(t *testing.T) {
 }
 
 func TestLogAppendNewBlock(t *testing.T) {
-	fileMgr := setup(tempFileName)
-	defer teardown(fileMgr.DbFilePath(tempFileName), fileMgr)
+	fileMgr := createFile(tempFileName)
+	defer removeFile(fileMgr.DbFilePath(tempFileName), fileMgr.DbDir)
 	logMgr := NewLogMgr(fileMgr, tempFileName)
 
 	initialBlockCount := logMgr.fileMgr.BlockCount(tempFileName)
@@ -95,8 +98,8 @@ func TestLogAppendNewBlock(t *testing.T) {
 }
 
 func TestLogFlush(t *testing.T) {
-	fileMgr := setup(tempFileName)
-	defer teardown(fileMgr.DbFilePath(tempFileName), fileMgr)
+	fileMgr := createFile(tempFileName)
+	defer removeFile(fileMgr.DbFilePath(tempFileName), fileMgr.DbDir)
 	logMgr := NewLogMgr(fileMgr, tempFileName)
 
 	assert.Equal(t, 0, logMgr.latestLogSeqNum)
@@ -112,8 +115,8 @@ func TestLogFlush(t *testing.T) {
 }
 
 func TestLogIterator(t *testing.T) {
-	fileMgr := setup(tempFileName)
-	defer teardown(fileMgr.DbFilePath(tempFileName), fileMgr)
+	fileMgr := createFile(tempFileName)
+	defer removeFile(fileMgr.DbFilePath(tempFileName), fileMgr.DbDir)
 	logMgr := NewLogMgr(fileMgr, tempFileName)
 
 	text := []string{"abcde", "fgh", "ijklmn", "opq"}

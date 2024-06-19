@@ -12,9 +12,9 @@ const blockTestSize = 100
 
 var tempFileName = "temp_file"
 
-// setup creates file temp_dir/filename
+// createFile creates file temp_dir/filename
 // and populates file with 100 bytes each of a, b, c
-func setup(filename string) (*os.File, FileMgr) {
+func createFile(filename string) (*os.File, FileMgr) {
 	fileMgr := NewFileMgr("temp_dir", blockTestSize)
 	file, err := os.Create(fileMgr.DbFilePath(filename))
 	if err != nil {
@@ -27,18 +27,17 @@ func setup(filename string) (*os.File, FileMgr) {
 	return file, fileMgr
 }
 
-func teardown(file *os.File, fileMgr FileMgr) {
-	file.Close()
-	os.Remove(file.Name())
-	os.Remove(fileMgr.DbDir)
+func removeFile(filename string, dbDir string) {
+	os.Remove(filename)
+	os.Remove(dbDir)
 }
 
 func TestFileRead(t *testing.T) {
-	file, fileMgr := setup(tempFileName)
-	defer teardown(file, fileMgr)
+	file, fileMgr := createFile(tempFileName)
+	defer removeFile(file.Name(), fileMgr.DbDir)
 
 	tests := []struct {
-		blockNum uint32
+		blockNum int64
 		char     string
 	}{
 		{0, "a"},
@@ -59,8 +58,8 @@ func TestFileRead(t *testing.T) {
 }
 
 func TestFileWrite(t *testing.T) {
-	file, fileMgr := setup(tempFileName)
-	defer teardown(file, fileMgr)
+	file, fileMgr := createFile(tempFileName)
+	defer removeFile(file.Name(), fileMgr.DbDir)
 
 	// intially 2nd file block has 100 bytes of "b", Overwrite with 100 bytes of "o" and verify if its changed
 	block := GetBlock(tempFileName, 1)
@@ -74,8 +73,8 @@ func TestFileWrite(t *testing.T) {
 }
 
 func TestFileAppend(t *testing.T) {
-	file, fileMgr := setup(tempFileName)
-	defer teardown(file, fileMgr)
+	file, fileMgr := createFile(tempFileName)
+	defer removeFile(file.Name(), fileMgr.DbDir)
 
 	initialBlockCount := fileMgr.BlockCount(tempFileName)
 	fileMgr.Append(tempFileName)
@@ -85,12 +84,12 @@ func TestFileAppend(t *testing.T) {
 }
 
 func TestBlockCount(t *testing.T) {
-	file, fileMgr := setup(tempFileName)
-	defer teardown(file, fileMgr)
+	file, fileMgr := createFile(tempFileName)
+	defer removeFile(file.Name(), fileMgr.DbDir)
 
-	assert.Equal(t, uint32(3), fileMgr.BlockCount(tempFileName))
+	assert.Equal(t, int64(3), fileMgr.BlockCount(tempFileName))
 
 	newTempFile := "new_temp_file"
-	assert.Equal(t, uint32(0), fileMgr.BlockCount(newTempFile))
+	assert.Equal(t, int64(0), fileMgr.BlockCount(newTempFile))
 	os.Remove(fileMgr.DbFilePath(newTempFile))
 }
