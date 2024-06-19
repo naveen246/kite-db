@@ -1,4 +1,4 @@
-package log
+package loghandler
 
 import (
 	"github.com/naveen246/kite-db/file"
@@ -15,13 +15,13 @@ type LogIterator struct {
 
 func NewIterator(fileMgr file.FileMgr, block file.Block) *LogIterator {
 	page := file.NewPageWithSize(fileMgr.BlockSize)
-	logIter := &LogIterator{
+	iter := &LogIterator{
 		fileMgr: fileMgr,
 		block:   block,
 		page:    page,
 	}
-	logIter.moveToBlock(block)
-	return logIter
+	iter.moveToBlock(block)
+	return iter
 }
 
 func (l *LogIterator) HasNext() bool {

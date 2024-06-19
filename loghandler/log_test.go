@@ -1,4 +1,4 @@
-package log
+package loghandler
 
 import (
 	"github.com/naveen246/kite-db/file"
@@ -101,9 +101,11 @@ func TestLogFlush(t *testing.T) {
 
 	assert.Equal(t, 0, logMgr.latestLogSeqNum)
 	assert.Equal(t, 0, logMgr.lastSavedLogSeqNum)
+
 	logMgr.Append([]byte("abcde"))
 	assert.Equal(t, 1, logMgr.latestLogSeqNum)
 	assert.Equal(t, 0, logMgr.lastSavedLogSeqNum)
+
 	logMgr.Flush(1)
 	assert.Equal(t, 1, logMgr.latestLogSeqNum)
 	assert.Equal(t, 1, logMgr.lastSavedLogSeqNum)

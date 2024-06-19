@@ -1,4 +1,4 @@
-package log
+package loghandler
 
 import (
 	"github.com/naveen246/kite-db/common"
@@ -14,11 +14,11 @@ New logRecords are appended to the end of the logFile.
 
 Data is appended in reverse order in each block of the logFile
 Below is an example of how the log sequence numbers would look when we append 15 items
-+-------------+---------------------+---------------------+
++-------------+--------------------+---------------------+
 | 3, 2, 1, 0  |  9, 8, 7, 6, 5, 4  |  14, 13, 12, 11, 10 |
-+-------------+---------------------+---------------------+
-| Block 0     |  Block 1            |  Block 2            |
-+-------------+---------------------+---------------------+
++-------------+--------------------+---------------------+
+| Block 0     |  Block 1           |  Block 2            |
++-------------+--------------------+---------------------+
 
 logFile is read from latest to oldest data as follows,
 Block 2 is read first (14-10)
