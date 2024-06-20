@@ -1,20 +1,21 @@
 package file
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 )
 
-const IntSize = 4
+const IntSize = 8
 
 var ErrOutOfBounds = errors.New("offset out of bounds")
 
 // Page is a struct to store data(Int, bytes, string) in memory (Page.Buffer)
-// Int - each Int is stored as 4 bytes in memory
+// Int - each Int is stored as 8 bytes in memory
 // +---------+
 // | Int     |
 // +---------+
-// | 4 bytes |
+// | 8 bytes |
 // +---------+
 //
 // bytes- first we store len(bytes) as Int and then append actual bytes
@@ -23,14 +24,14 @@ var ErrOutOfBounds = errors.New("offset out of bounds")
 // +----------+----------------+
 // | dataSize | data           |
 // +----------+----------------+
-// | 4 bytes  | dataSize bytes |
+// | 8 bytes  | dataSize bytes |
 // +----------+----------------+
 type Page struct {
 	Buffer []byte
-	Size   uint32
+	Size   int64
 }
 
-func NewPageWithSize(size uint32) *Page {
+func NewPageWithSize(size int64) *Page {
 	bytes := make([]byte, size)
 	return &Page{
 		Buffer: bytes,
@@ -41,28 +42,34 @@ func NewPageWithSize(size uint32) *Page {
 func NewPageWithBytes(bytes []byte) *Page {
 	return &Page{
 		Buffer: bytes,
-		Size:   uint32(len(bytes)),
+		Size:   int64(len(bytes)),
 	}
 }
 
-func (p *Page) GetInt(offset uint32) (uint32, error) {
+func (p *Page) GetInt(offset int64) (int64, error) {
 	offsetEnd := offset + IntSize
 	if offsetEnd > p.Size {
 		return 0, ErrOutOfBounds
 	}
-	return binary.BigEndian.Uint32(p.Buffer[offset:offsetEnd]), nil
+	val, err := BytesToInt64(p.Buffer[offset:offsetEnd])
+	if err != nil {
+		return 0, err
+	}
+	return val, nil
 }
 
-func (p *Page) SetInt(offset uint32, value uint32) error {
+func (p *Page) SetInt(offset int64, value int64) error {
 	offsetEnd := offset + IntSize
 	if offsetEnd > p.Size {
 		return ErrOutOfBounds
 	}
-	binary.BigEndian.PutUint32(p.Buffer[offset:offsetEnd], value)
+
+	bs := Int64ToBytes(value)
+	copy(p.Buffer[offset:offsetEnd], bs)
 	return nil
 }
 
-func (p *Page) GetBytes(offset uint32) ([]byte, error) {
+func (p *Page) GetBytes(offset int64) ([]byte, error) {
 	length, err := p.GetInt(offset)
 	if err != nil {
 		return nil, err
@@ -75,13 +82,14 @@ func (p *Page) GetBytes(offset uint32) ([]byte, error) {
 	return p.Buffer[offsetStart:offsetEnd], nil
 }
 
-func (p *Page) SetBytes(offset uint32, b []byte) error {
+func (p *Page) SetBytes(offset int64, b []byte) error {
 	offsetStart := offset + IntSize
-	offsetEnd := offsetStart + uint32(len(b))
+	offsetEnd := offsetStart + int64(len(b))
 	if offsetEnd > p.Size {
 		return ErrOutOfBounds
 	}
-	err := p.SetInt(offset, uint32(len(b)))
+
+	err := p.SetInt(offset, int64(len(b)))
 	if err != nil {
 		return err
 	}
@@ -89,7 +97,7 @@ func (p *Page) SetBytes(offset uint32, b []byte) error {
 	return nil
 }
 
-func (p *Page) GetString(offset uint32) (string, error) {
+func (p *Page) GetString(offset int64) (string, error) {
 	bytes, err := p.GetBytes(offset)
 	if err != nil {
 		return "", err
@@ -97,6 +105,29 @@ func (p *Page) GetString(offset uint32) (string, error) {
 	return string(bytes), nil
 }
 
-func (p *Page) SetString(offset uint32, value string) error {
+func (p *Page) SetString(offset int64, value string) error {
 	return p.SetBytes(offset, []byte(value))
+}
+
+func (p *Page) MaxLen(strLen int) int {
+	return IntSize + strLen
+}
+
+func Int64ToBytes(value int64) []byte {
+	bs := make([]byte, IntSize)
+	var a any = value
+	switch v := a.(type) {
+	case int64:
+		binary.BigEndian.PutUint64(bs, uint64(v))
+	}
+	return bs
+}
+
+func BytesToInt64(b []byte) (int64, error) {
+	var val int64
+	err := binary.Read(bytes.NewReader(b), binary.BigEndian, &val)
+	if err != nil {
+		return 0, err
+	}
+	return val, nil
 }

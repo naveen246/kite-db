@@ -19,11 +19,11 @@ const filePermission = 0666
 // and Write from memory(Page) to a file Block
 type FileMgr struct {
 	DbDir     string
-	BlockSize uint32
+	BlockSize int64
 	IsNew     bool
 }
 
-func NewFileMgr(dbDir string, blockSize uint32) FileMgr {
+func NewFileMgr(dbDir string, blockSize int64) FileMgr {
 	fileMgr := FileMgr{
 		DbDir:     dbDir,
 		BlockSize: blockSize,
@@ -49,7 +49,7 @@ func (f *FileMgr) Read(block Block, page *Page) error {
 	}
 	defer file.Close()
 
-	_, err = file.ReadAt(page.Buffer, int64(block.Number*f.BlockSize))
+	_, err = file.ReadAt(page.Buffer, block.Number*f.BlockSize)
 	if err != nil {
 		return fmt.Errorf("could not read block %v, %v", block, err)
 	}
@@ -94,7 +94,7 @@ func (f *FileMgr) Append(filename string) (Block, error) {
 	return block, nil
 }
 
-func (f *FileMgr) BlockCount(filename string) uint32 {
+func (f *FileMgr) BlockCount(filename string) int64 {
 	path := f.DbFilePath(filename)
 
 	fileInfo, err := os.Stat(path)
@@ -107,7 +107,7 @@ func (f *FileMgr) BlockCount(filename string) uint32 {
 	if err != nil {
 		log.Fatalf("Failed to get BlockCount for %v, %v\n", filename, err)
 	}
-	return uint32(fileInfo.Size()) / f.BlockSize
+	return fileInfo.Size() / f.BlockSize
 }
 
 func (f *FileMgr) DbFilePath(filename string) string {
