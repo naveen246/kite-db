@@ -9,7 +9,7 @@ build: fmt vet
 	go build -v -o bin/kitedb ./cmd
 
 test: build
-	go test -cover -race ./...
+	go test -count=1 -cover -race ./...
 
 test_coverage:
 	go test -coverprofile=coverage.out ./...; \

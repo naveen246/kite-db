@@ -49,7 +49,7 @@ func (f *FileMgr) Read(block Block, page *Page) error {
 	}
 	defer file.Close()
 
-	_, err = file.ReadAt(page.Buffer, int64(block.Number*f.BlockSize))
+	_, err = file.ReadAt(page.Buffer, block.Number*f.BlockSize)
 	if err != nil {
 		return fmt.Errorf("could not read block %v, %v", block, err)
 	}
