@@ -3,7 +3,7 @@ package buffer
 import (
 	"fmt"
 	"github.com/naveen246/kite-db/file"
-	"github.com/naveen246/kite-db/loghandler"
+	"github.com/naveen246/kite-db/wal"
 )
 
 // Buffer A Buffer wraps a page and stores information about its status,
@@ -11,7 +11,7 @@ import (
 // whether its contents have been modified, and if so, the id and logSequenceNumber of the modifying transaction.
 type Buffer struct {
 	fileMgr file.FileMgr
-	logMgr  *loghandler.LogMgr
+	log     *wal.Log
 
 	// The main content of the buffer which is accessed by clients to read/write data
 	Contents *file.Page
@@ -29,12 +29,12 @@ type Buffer struct {
 	logSeqNum int
 }
 
-func NewBuffer(id string, fileMgr file.FileMgr, logMgr *loghandler.LogMgr) *Buffer {
+func NewBuffer(id string, fileMgr file.FileMgr, log *wal.Log) *Buffer {
 	page := file.NewPageWithSize(fileMgr.BlockSize)
 	return &Buffer{
 		ID:        id,
 		fileMgr:   fileMgr,
-		logMgr:    logMgr,
+		log:       log,
 		Contents:  page,
 		txNum:     -1,
 		pins:      0,
@@ -72,7 +72,7 @@ func (b *Buffer) assignToBlock(block file.Block) error {
 // Write the buffer to its disk block if it is dirty.
 func (b *Buffer) flush() error {
 	if b.txNum >= 0 {
-		b.logMgr.Flush(b.logSeqNum)
+		b.log.Flush(b.logSeqNum)
 		err := b.fileMgr.Write(b.Block, b.Contents)
 		if err != nil {
 			return err

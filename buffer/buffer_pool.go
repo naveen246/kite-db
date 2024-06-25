@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/naveen246/kite-db/file"
-	"github.com/naveen246/kite-db/loghandler"
+	"github.com/naveen246/kite-db/wal"
 	"log"
 	"slices"
 	"sync"
 	"time"
 )
 
-// BufferMgr Manages the pinning and unpinning of buffers to blocks.
-type BufferMgr struct {
+// BufferPool Manages the pinning and unpinning of buffers to blocks.
+type BufferPool struct {
 	sync.Mutex
 	unpinnedBuffers []*Buffer
 
@@ -20,26 +20,26 @@ type BufferMgr struct {
 	allocatedBuffers map[string]*Buffer
 }
 
-func NewBufferMgr(fileMgr file.FileMgr, logMgr *loghandler.LogMgr, bufCount int) *BufferMgr {
+func NewBufferPool(fileMgr file.FileMgr, log *wal.Log, bufCount int) *BufferPool {
 	buffers := make([]*Buffer, bufCount)
 	for i := 0; i < bufCount; i++ {
-		buffers[i] = NewBuffer(uuid.NewString(), fileMgr, logMgr)
+		buffers[i] = NewBuffer(uuid.NewString(), fileMgr, log)
 	}
-	return &BufferMgr{
+	return &BufferPool{
 		unpinnedBuffers:  buffers,
 		allocatedBuffers: make(map[string]*Buffer),
 	}
 }
 
 // Available Returns the number of available (i.e. unpinned) buffers.
-func (bm *BufferMgr) Available() int {
+func (bm *BufferPool) Available() int {
 	bm.Lock()
 	defer bm.Unlock()
 	return len(bm.unpinnedBuffers)
 }
 
 // FlushAll Flushes the dirty buffers modified by the specified transaction.
-func (bm *BufferMgr) FlushAll(txNum int) {
+func (bm *BufferPool) FlushAll(txNum int) {
 	bm.Lock()
 	defer bm.Unlock()
 	for _, buf := range bm.allocatedBuffers {
@@ -55,7 +55,7 @@ func (bm *BufferMgr) FlushAll(txNum int) {
 // UnpinBuffer Unpins the specified data buffer.
 // If its pin count goes to 0, then it means that no client is accessing the buffer to read/write data
 // The client should explicitly unpin the buffer when its work is done
-func (bm *BufferMgr) UnpinBuffer(buffer *Buffer) {
+func (bm *BufferPool) UnpinBuffer(buffer *Buffer) {
 	bm.Lock()
 	defer bm.Unlock()
 	buffer.unpin()
@@ -67,7 +67,7 @@ func (bm *BufferMgr) UnpinBuffer(buffer *Buffer) {
 // PinBuffer Pins a buffer to the specified block, potentially waiting until a buffer becomes available.
 // If no buffer becomes available within a fixed time period, then exit with an error
 // Caller has an option to skip waiting and return immediately with nil if buffer is not available
-func (bm *BufferMgr) PinBuffer(block file.Block, skipWait ...bool) *Buffer {
+func (bm *BufferPool) PinBuffer(block file.Block, skipWait ...bool) *Buffer {
 	bm.Lock()
 	buf := bm.tryToPin(block)
 	bm.Unlock()
@@ -97,7 +97,7 @@ func (bm *BufferMgr) PinBuffer(block file.Block, skipWait ...bool) *Buffer {
 // If there is already a buffer allocated to that block then that buffer is used;
 // otherwise, an unpinned buffer from the pool is chosen.
 // Returns nil if there are no available buffers or if assignToBlock failed.
-func (bm *BufferMgr) tryToPin(block file.Block) *Buffer {
+func (bm *BufferPool) tryToPin(block file.Block) *Buffer {
 	buf := bm.prevAllocatedBuffer(block)
 	if buf == nil {
 		buf = bm.chooseUnpinnedBuffer()
@@ -121,7 +121,7 @@ func (bm *BufferMgr) tryToPin(block file.Block) *Buffer {
 	return buf
 }
 
-func (bm *BufferMgr) prevAllocatedBuffer(block file.Block) *Buffer {
+func (bm *BufferPool) prevAllocatedBuffer(block file.Block) *Buffer {
 	buf, ok := bm.allocatedBuffers[block.String()]
 	if ok {
 		return buf
@@ -129,7 +129,7 @@ func (bm *BufferMgr) prevAllocatedBuffer(block file.Block) *Buffer {
 	return nil
 }
 
-func (bm *BufferMgr) removeBufferFromUnpinned(buf *Buffer) {
+func (bm *BufferPool) removeBufferFromUnpinned(buf *Buffer) {
 	index := -1
 	for i := 0; i < len(bm.unpinnedBuffers); i++ {
 		if bm.unpinnedBuffers[i].ID == buf.ID {
@@ -142,7 +142,7 @@ func (bm *BufferMgr) removeBufferFromUnpinned(buf *Buffer) {
 	}
 }
 
-func (bm *BufferMgr) chooseUnpinnedBuffer() *Buffer {
+func (bm *BufferPool) chooseUnpinnedBuffer() *Buffer {
 	if len(bm.unpinnedBuffers) > 0 {
 		buf := bm.unpinnedBuffers[0]
 		bm.unpinnedBuffers = slices.Delete(bm.unpinnedBuffers, 0, 1)
@@ -152,7 +152,7 @@ func (bm *BufferMgr) chooseUnpinnedBuffer() *Buffer {
 }
 
 // for debugging
-func (bm *BufferMgr) printStatus() {
+func (bm *BufferPool) printStatus() {
 	fmt.Println("Allocated buffers")
 	for _, buf := range bm.allocatedBuffers {
 		fmt.Println(buf.String())

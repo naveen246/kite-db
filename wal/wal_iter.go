@@ -1,4 +1,4 @@
-package loghandler
+package wal
 
 import (
 	"github.com/naveen246/kite-db/file"

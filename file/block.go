@@ -12,5 +12,5 @@ func GetBlock(fileName string, blockNum int64) Block {
 }
 
 func (b Block) String() string {
-	return fmt.Sprintf("file: %v, block: %v", b.Filename, b.Number)
+	return fmt.Sprintf("[file: %v, block: %v]", b.Filename, b.Number)
 }
