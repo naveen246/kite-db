@@ -2,6 +2,7 @@ package wal
 
 import (
 	"github.com/naveen246/kite-db/file"
+	log2 "log"
 )
 
 // LogIterator provides the ability to move from latest to oldest log record
@@ -48,6 +49,9 @@ func (l *LogIterator) Next() []byte {
 // moveToBlock Moves to the specified log block
 // and positions it at the first record in that block
 func (l *LogIterator) moveToBlock(block file.Block) {
-	l.fileMgr.Read(block, l.page)
+	err := l.fileMgr.Read(block, l.page)
+	if err != nil {
+		log2.Fatalln("Failed to moveToBlock", err)
+	}
 	l.currentPos, _ = l.page.GetInt(0)
 }

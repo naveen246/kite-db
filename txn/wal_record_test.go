@@ -49,14 +49,14 @@ func TestCheckpointRecord(t *testing.T) {
 	defer removeFile(db.FileMgr.DbFilePath(filename), dbDir)
 	defer removeFile(db.FileMgr.DbFilePath(logFile), dbDir)
 
-	lm := db.Log
-	lsn := writeCheckPointToLog(lm)
+	log := db.Log
+	lsn := writeCheckPointToLog(log)
 	assert.Equal(t, 1, lsn)
 
-	assert.True(t, lm.Iterator().HasNext())
+	assert.True(t, log.Iterator().HasNext())
 	expected := make([]byte, file.IntSize)
 	expected[7] = CheckPoint
-	assert.Equal(t, expected, lm.Iterator().Next())
+	assert.Equal(t, expected, log.Iterator().Next())
 }
 
 func TestStartRecord(t *testing.T) {
@@ -65,16 +65,16 @@ func TestStartRecord(t *testing.T) {
 	defer removeFile(db.FileMgr.DbFilePath(filename), dbDir)
 	defer removeFile(db.FileMgr.DbFilePath(logFile), dbDir)
 
-	lm := db.Log
-	txNum := 2
-	lsn := writeStartRecToLog(lm, txNum)
+	log := db.Log
+	var txNum TxID = 2
+	lsn := writeStartRecToLog(log, txNum)
 	assert.Equal(t, 1, lsn)
 
-	assert.True(t, lm.Iterator().HasNext())
+	assert.True(t, log.Iterator().HasNext())
 	expected := make([]byte, 2*file.IntSize)
 	expected[7] = Start
 	expected[15] = byte(txNum)
-	assert.Equal(t, expected, lm.Iterator().Next())
+	assert.Equal(t, expected, log.Iterator().Next())
 }
 
 func TestCommitRecord(t *testing.T) {
@@ -83,16 +83,16 @@ func TestCommitRecord(t *testing.T) {
 	defer removeFile(db.FileMgr.DbFilePath(filename), dbDir)
 	defer removeFile(db.FileMgr.DbFilePath(logFile), dbDir)
 
-	lm := db.Log
-	txNum := 2
-	lsn := writeCommitRecToLog(lm, txNum)
+	log := db.Log
+	var txNum TxID = 2
+	lsn := writeCommitRecToLog(log, txNum)
 	assert.Equal(t, 1, lsn)
 
-	assert.True(t, lm.Iterator().HasNext())
+	assert.True(t, log.Iterator().HasNext())
 	expected := make([]byte, 2*file.IntSize)
 	expected[7] = Commit
 	expected[15] = byte(txNum)
-	assert.Equal(t, expected, lm.Iterator().Next())
+	assert.Equal(t, expected, log.Iterator().Next())
 }
 
 func TestRollbackRecord(t *testing.T) {
@@ -101,14 +101,14 @@ func TestRollbackRecord(t *testing.T) {
 	defer removeFile(db.FileMgr.DbFilePath(filename), dbDir)
 	defer removeFile(db.FileMgr.DbFilePath(logFile), dbDir)
 
-	lm := db.Log
-	txNum := 2
-	lsn := writeRollbackRecToLog(lm, txNum)
+	log := db.Log
+	var txNum TxID = 2
+	lsn := writeRollbackRecToLog(log, txNum)
 	assert.Equal(t, 1, lsn)
 
-	assert.True(t, lm.Iterator().HasNext())
+	assert.True(t, log.Iterator().HasNext())
 	expected := make([]byte, 2*file.IntSize)
 	expected[7] = Rollback
 	expected[15] = byte(txNum)
-	assert.Equal(t, expected, lm.Iterator().Next())
+	assert.Equal(t, expected, log.Iterator().Next())
 }

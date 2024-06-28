@@ -25,7 +25,7 @@ type Buffer struct {
 	// txNum >= 0 indicates that the buffer page is modified in memory by a client and the page
 	// has to be flushed to disk at some point.
 	// Initial value is -1 when there is no change in the buffer page
-	txNum     int
+	txNum     int64
 	logSeqNum int
 }
 
@@ -44,7 +44,7 @@ func NewBuffer(id string, fileMgr file.FileMgr, log *wal.Log) *Buffer {
 
 // SetModified is called when there is modification done in-memory to the buffer page.
 // This indicates that the buffer page is dirty and will need to be flushed to disk at some point to persist the changes done.
-func (b *Buffer) SetModified(txNum int, lsn int) {
+func (b *Buffer) SetModified(txNum int64, lsn int) {
 	b.txNum = txNum
 	if lsn >= 0 {
 		b.logSeqNum = lsn

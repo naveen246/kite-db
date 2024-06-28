@@ -39,7 +39,7 @@ func (bm *BufferPool) Available() int {
 }
 
 // FlushAll Flushes the dirty buffers modified by the specified transaction.
-func (bm *BufferPool) FlushAll(txNum int) {
+func (bm *BufferPool) FlushAll(txNum int64) {
 	bm.Lock()
 	defer bm.Unlock()
 	for _, buf := range bm.allocatedBuffers {

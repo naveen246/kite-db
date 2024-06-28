@@ -179,7 +179,7 @@ func TestBufferPinningAndUnpinning(t *testing.T) {
 	verifyAllocatedBuffer(t, bufPool, block4, true, 1, -1)
 }
 
-func verifyAllocatedBuffer(t *testing.T, bufPool *BufferPool, block file.Block, isPinned bool, pinCount int, txNum int) {
+func verifyAllocatedBuffer(t *testing.T, bufPool *BufferPool, block file.Block, isPinned bool, pinCount int, txNum int64) {
 	buf := bufPool.allocatedBuffers[block.String()]
 	assert.Equal(t, isPinned, buf.isPinned())
 	assert.Equal(t, pinCount, buf.pins)

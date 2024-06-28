@@ -4,59 +4,211 @@ import (
 	"github.com/naveen246/kite-db/buffer"
 	"github.com/naveen246/kite-db/file"
 	"github.com/naveen246/kite-db/wal"
+	"log"
 )
 
 const EndOfFile = -1
 
+type TxID int64
+
+var nextTxNum TxID
+
+func nextTxNumber() TxID {
+	nextTxNum++
+	return nextTxNum
+}
+
 type Transaction struct {
-	nxtTxNum    int
-	recoveryMgr *RecoveryMgr
+	txNum       TxID
 	bufferPool  *buffer.BufferPool
 	fileMgr     file.FileMgr
+	concurMgr   *concurrencyMgr
+	recoveryMgr *RecoveryMgr
 	buffers     *BufferList
 }
 
 func NewTransaction(fileMgr file.FileMgr, log *wal.Log, bufferPool *buffer.BufferPool) *Transaction {
-	return &Transaction{
-		bufferPool:  bufferPool,
-		fileMgr:     fileMgr,
-		recoveryMgr: NewRecoveryMgr(log),
-		buffers:     NewBufferList(),
-	}
+	tx := &Transaction{}
+	tx.bufferPool = bufferPool
+	tx.fileMgr = fileMgr
+	tx.txNum = nextTxNumber()
+	tx.concurMgr = newConcurrencyMgr()
+	tx.recoveryMgr = NewRecoveryMgr(tx, tx.txNum, log, bufferPool)
+	tx.buffers = NewBufferList(bufferPool)
+	return tx
 }
 
 func (tx *Transaction) Commit() {
-
+	tx.recoveryMgr.commit()
+	tx.concurMgr.releaseLocks(tx.txNum)
+	tx.buffers.unpinAll()
 }
 
 func (tx *Transaction) Rollback() {
-
+	tx.recoveryMgr.rollback()
+	tx.concurMgr.releaseLocks(tx.txNum)
+	tx.buffers.unpinAll()
 }
 
 func (tx *Transaction) Recover() {
-
+	tx.bufferPool.FlushAll(int64(tx.txNum))
+	tx.recoveryMgr.recover()
 }
 
 func (tx *Transaction) Pin(block file.Block) {
-
+	tx.buffers.pin(block)
 }
 
 func (tx *Transaction) Unpin(block file.Block) {
-
+	tx.buffers.unpin(block)
 }
 
-func (tx *Transaction) GetInt(block file.Block, offset int) int {
-	return 0
+func (tx *Transaction) GetInt(block file.Block, offset int) (int, error) {
+	err := tx.concurMgr.sLock(block, tx.txNum)
+	if err != nil {
+		return 0, err
+	}
+
+	buf := tx.buffers.getBuffer(block)
+	val, err := buf.Contents.GetInt(int64(offset))
+	if err != nil {
+		log.Fatalln("Transaction GetInt err:", err)
+	}
+
+	return int(val), nil
 }
 
-func (tx *Transaction) GetString(block file.Block, offset int) string {
-	return ""
+func (tx *Transaction) GetString(block file.Block, offset int) (string, error) {
+	err := tx.concurMgr.sLock(block, tx.txNum)
+	if err != nil {
+		return "", err
+	}
+
+	buf := tx.buffers.getBuffer(block)
+	val, err := buf.Contents.GetString(int64(offset))
+	if err != nil {
+		log.Fatalln("Transaction GetString err:", err)
+	}
+
+	return val, nil
 }
 
-func (tx *Transaction) SetInt(block file.Block, offset int, val int, okToLog bool) {
+func (tx *Transaction) SetInt(block file.Block, offset int, val int, okToLog bool) error {
+	err := tx.concurMgr.xLock(block, tx.txNum)
+	if err != nil {
+		return err
+	}
 
+	buf := tx.buffers.getBuffer(block)
+	lsn := -1
+	if okToLog {
+		lsn = tx.recoveryMgr.setInt(buf, offset)
+	}
+
+	err = buf.Contents.SetInt(int64(offset), int64(val))
+	if err != nil {
+		log.Fatalln("Transaction SetInt err:", err)
+	}
+
+	buf.SetModified(int64(tx.txNum), lsn)
+	return nil
 }
 
-func (tx *Transaction) SetString(block file.Block, offset int, val string, okToLog bool) {
+func (tx *Transaction) SetString(block file.Block, offset int, val string, okToLog bool) error {
+	err := tx.concurMgr.xLock(block, tx.txNum)
+	if err != nil {
+		return err
+	}
 
+	buf := tx.buffers.getBuffer(block)
+	lsn := -1
+	if okToLog {
+		lsn = tx.recoveryMgr.setString(buf, offset)
+	}
+
+	err = buf.Contents.SetString(int64(offset), val)
+	if err != nil {
+		log.Fatalln("Transaction SetString err:", err)
+	}
+
+	buf.SetModified(int64(tx.txNum), lsn)
+	return nil
+}
+
+func (tx *Transaction) AvailableBuffers() int {
+	return tx.bufferPool.Available()
+}
+
+func (tx *Transaction) Size(filename string) (int, error) {
+	eofBlock := file.GetBlock(filename, EndOfFile)
+	err := tx.concurMgr.sLock(eofBlock, tx.txNum)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(tx.fileMgr.BlockCount(filename)), nil
+}
+
+func (tx *Transaction) Append(filename string) (file.Block, error) {
+	eofBlock := file.GetBlock(filename, EndOfFile)
+	err := tx.concurMgr.xLock(eofBlock, tx.txNum)
+	if err != nil {
+		return file.Block{}, err
+	}
+
+	block, err := tx.fileMgr.Append(filename)
+	if err != nil {
+		log.Fatalln("Transaction Append err:", err)
+	}
+	return block, nil
+}
+
+func (tx *Transaction) BlockSize() int {
+	return int(tx.fileMgr.BlockSize)
+}
+
+// ********************************************************
+
+type BufferList struct {
+	buffers  map[file.Block]*buffer.Buffer
+	pinCount map[file.Block]int
+	bufPool  *buffer.BufferPool
+}
+
+func NewBufferList(pool *buffer.BufferPool) *BufferList {
+	return &BufferList{
+		bufPool: pool,
+	}
+}
+
+func (b *BufferList) getBuffer(block file.Block) *buffer.Buffer {
+	return b.buffers[block]
+}
+
+func (b *BufferList) pin(block file.Block) {
+	buf := b.bufPool.PinBuffer(block)
+	b.buffers[block] = buf
+	b.pinCount[block] = b.pinCount[block] + 1
+}
+
+func (b *BufferList) unpin(block file.Block) {
+	buf := b.buffers[block]
+	b.bufPool.UnpinBuffer(buf)
+
+	b.pinCount[block] = b.pinCount[block] - 1
+	if b.pinCount[block] <= 0 {
+		delete(b.buffers, block)
+		delete(b.pinCount, block)
+	}
+}
+
+func (b *BufferList) unpinAll() {
+	for block, pinCount := range b.pinCount {
+		buf := b.buffers[block]
+		for i := 0; i < pinCount; i++ {
+			b.bufPool.UnpinBuffer(buf)
+		}
+	}
+	clear(b.buffers)
+	clear(b.pinCount)
 }
