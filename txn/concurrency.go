@@ -154,7 +154,7 @@ func (c *concurrencyMgr) xLock(block file.Block, txNum TxID) error {
 	return nil
 }
 
-func (c *concurrencyMgr) ReleaseLocks(txNum TxID) {
+func (c *concurrencyMgr) releaseLocks(txNum TxID) {
 	for blk := range c.locks {
 		c.lockTbl.unlock(blk, txNum)
 	}

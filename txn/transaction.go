@@ -22,7 +22,7 @@ type Transaction struct {
 	TxNum       TxID
 	bufferPool  *buffer.BufferPool
 	fileMgr     file.FileMgr
-	ConcurMgr   *concurrencyMgr
+	concurMgr   *concurrencyMgr
 	recoveryMgr *RecoveryMgr
 	buffers     *BufferList
 }
@@ -32,7 +32,7 @@ func NewTransaction(fileMgr file.FileMgr, log *wal.Log, bufferPool *buffer.Buffe
 	tx.bufferPool = bufferPool
 	tx.fileMgr = fileMgr
 	tx.TxNum = nextTxNumber()
-	tx.ConcurMgr = newConcurrencyMgr()
+	tx.concurMgr = newConcurrencyMgr()
 	tx.recoveryMgr = NewRecoveryMgr(tx, tx.TxNum, log, bufferPool)
 	tx.buffers = NewBufferList(bufferPool)
 	return tx
@@ -40,13 +40,13 @@ func NewTransaction(fileMgr file.FileMgr, log *wal.Log, bufferPool *buffer.Buffe
 
 func (tx *Transaction) Commit() {
 	tx.recoveryMgr.commit()
-	tx.ConcurMgr.ReleaseLocks(tx.TxNum)
+	tx.ReleaseLocks()
 	tx.buffers.unpinAll()
 }
 
 func (tx *Transaction) Rollback() {
 	tx.recoveryMgr.rollback()
-	tx.ConcurMgr.ReleaseLocks(tx.TxNum)
+	tx.ReleaseLocks()
 	tx.buffers.unpinAll()
 }
 
@@ -59,6 +59,10 @@ func (tx *Transaction) Recover() error {
 	return nil
 }
 
+func (tx *Transaction) ReleaseLocks() {
+	tx.concurMgr.releaseLocks(tx.TxNum)
+}
+
 func (tx *Transaction) Pin(block file.Block) {
 	tx.buffers.pin(block)
 }
@@ -68,7 +72,7 @@ func (tx *Transaction) Unpin(block file.Block) {
 }
 
 func (tx *Transaction) GetInt(block file.Block, offset int) (int, error) {
-	err := tx.ConcurMgr.sLock(block, tx.TxNum)
+	err := tx.concurMgr.sLock(block, tx.TxNum)
 	if err != nil {
 		return 0, err
 	}
@@ -83,7 +87,7 @@ func (tx *Transaction) GetInt(block file.Block, offset int) (int, error) {
 }
 
 func (tx *Transaction) GetString(block file.Block, offset int) (string, error) {
-	err := tx.ConcurMgr.sLock(block, tx.TxNum)
+	err := tx.concurMgr.sLock(block, tx.TxNum)
 	if err != nil {
 		return "", err
 	}
@@ -98,7 +102,7 @@ func (tx *Transaction) GetString(block file.Block, offset int) (string, error) {
 }
 
 func (tx *Transaction) SetInt(block file.Block, offset int64, val int, okToLog bool) error {
-	err := tx.ConcurMgr.xLock(block, tx.TxNum)
+	err := tx.concurMgr.xLock(block, tx.TxNum)
 	if err != nil {
 		return err
 	}
@@ -119,7 +123,7 @@ func (tx *Transaction) SetInt(block file.Block, offset int64, val int, okToLog b
 }
 
 func (tx *Transaction) SetString(block file.Block, offset int64, val string, okToLog bool) error {
-	err := tx.ConcurMgr.xLock(block, tx.TxNum)
+	err := tx.concurMgr.xLock(block, tx.TxNum)
 	if err != nil {
 		return err
 	}
@@ -145,7 +149,7 @@ func (tx *Transaction) AvailableBuffers() int {
 
 func (tx *Transaction) Size(filename string) (int, error) {
 	eofBlock := file.GetBlock(filename, EndOfFile)
-	err := tx.ConcurMgr.sLock(eofBlock, tx.TxNum)
+	err := tx.concurMgr.sLock(eofBlock, tx.TxNum)
 	if err != nil {
 		return 0, err
 	}
@@ -155,7 +159,7 @@ func (tx *Transaction) Size(filename string) (int, error) {
 
 func (tx *Transaction) Append(filename string) (file.Block, error) {
 	eofBlock := file.GetBlock(filename, EndOfFile)
-	err := tx.ConcurMgr.xLock(eofBlock, tx.TxNum)
+	err := tx.concurMgr.xLock(eofBlock, tx.TxNum)
 	if err != nil {
 		return file.Block{}, err
 	}
