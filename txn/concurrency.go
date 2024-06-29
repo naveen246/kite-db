@@ -24,7 +24,9 @@ type lockTable struct {
 
 func getLockTable() *lockTable {
 	once.Do(func() {
-		lockTbl = &lockTable{}
+		lockTbl = &lockTable{
+			locks: make(map[file.Block][]txLock),
+		}
 	})
 	return lockTbl
 }
@@ -39,7 +41,7 @@ func (l *lockTable) sLock(block file.Block, txNum TxID) error {
 			if txLock.lkType == exclusiveLock {
 				otherTxHasXLock = true
 			}
-			if txLock.txId > txNum {
+			if txLock.txId < txNum {
 				hasOlderTx = true
 			}
 		}
@@ -70,7 +72,7 @@ func (l *lockTable) xLock(block file.Block, txNum TxID) error {
 			if txLock.txId != txNum {
 				otherTxHasAnyLock = true
 			}
-			if txLock.txId > txNum {
+			if txLock.txId < txNum {
 				hasOlderTx = true
 			}
 		}
@@ -152,7 +154,7 @@ func (c *concurrencyMgr) xLock(block file.Block, txNum TxID) error {
 	return nil
 }
 
-func (c *concurrencyMgr) releaseLocks(txNum TxID) {
+func (c *concurrencyMgr) ReleaseLocks(txNum TxID) {
 	for blk := range c.locks {
 		c.lockTbl.unlock(blk, txNum)
 	}

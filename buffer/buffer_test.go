@@ -1,8 +1,9 @@
-package buffer
+package buffer_test
 
 import (
+	"github.com/naveen246/kite-db/buffer"
 	"github.com/naveen246/kite-db/file"
-	"github.com/naveen246/kite-db/wal"
+	"github.com/naveen246/kite-db/server"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
@@ -14,23 +15,6 @@ const (
 	dbDir         = "bufferTest"
 	filename      = "testFile"
 )
-
-type DB struct {
-	FileMgr file.FileMgr
-	Log     *wal.Log
-	BufPool *BufferPool
-}
-
-func NewDB(dbDir string, blockSize int64, bufferCount int) *DB {
-	fileMgr := file.NewFileMgr(dbDir, blockSize)
-	log := wal.NewLog(fileMgr, logFile)
-	bufPool := NewBufferPool(fileMgr, log, bufferCount)
-	return &DB{
-		FileMgr: fileMgr,
-		Log:     log,
-		BufPool: bufPool,
-	}
-}
 
 func createFile(fileMgr file.FileMgr, filename string) {
 	f, _ := os.Create(fileMgr.DbFilePath(filename))
@@ -44,7 +28,7 @@ func removeFile(filename string, dbDir string) {
 
 func TestReuseAllocatedBuffer(t *testing.T) {
 	bufferCount := 8
-	db := NewDB(dbDir, blockTestSize, bufferCount)
+	db := server.NewDB(dbDir, blockTestSize, bufferCount)
 	createFile(db.FileMgr, filename)
 	defer removeFile(db.FileMgr.DbFilePath(filename), dbDir)
 	defer removeFile(db.FileMgr.DbFilePath(logFile), dbDir)
@@ -53,16 +37,16 @@ func TestReuseAllocatedBuffer(t *testing.T) {
 	pos1 := int64(88)
 
 	bufPool := db.BufPool
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	assert.Equal(t, bufferCount, bufPool.Available())
-	assert.Equal(t, 0, len(bufPool.allocatedBuffers))
+	assert.Equal(t, 0, len(bufPool.AllocatedBuffers))
 
 	// Pin a buffer to the block, change some content in memory.
 	// Notify the buffer that the buffer page is modified and then unpin the buffer.
 	buf1 := bufPool.PinBuffer(block)
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	assert.Equal(t, bufferCount-1, bufPool.Available())
-	assert.Equal(t, 1, len(bufPool.allocatedBuffers))
+	assert.Equal(t, 1, len(bufPool.AllocatedBuffers))
 	verifyAllocatedBuffer(t, bufPool, block, true, 1, -1)
 
 	page1 := buf1.Contents
@@ -75,19 +59,19 @@ func TestReuseAllocatedBuffer(t *testing.T) {
 	buf1.SetModified(1, 0)
 
 	bufPool.UnpinBuffer(buf1)
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	assert.Equal(t, bufferCount, bufPool.Available())
-	assert.Equal(t, 1, len(bufPool.allocatedBuffers))
+	assert.Equal(t, 1, len(bufPool.AllocatedBuffers))
 	verifyAllocatedBuffer(t, bufPool, block, false, 0, 1)
-	assert.False(t, bufPool.unpinnedBuffers[bufferCount-1].isPinned())
-	assert.Equal(t, int64(2), bufPool.unpinnedBuffers[bufferCount-1].Block.Number)
+	assert.False(t, bufPool.UnpinnedBuffers[bufferCount-1].IsPinned())
+	assert.Equal(t, int64(2), bufPool.UnpinnedBuffers[bufferCount-1].Block.Number)
 
 	// If we now try to pin a buffer to the same block,
 	// then the buffer that was previously allocated to the same block is selected again.
 	buf2 := bufPool.PinBuffer(block)
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	assert.Equal(t, bufferCount-1, bufPool.Available())
-	assert.Equal(t, 1, len(bufPool.allocatedBuffers))
+	assert.Equal(t, 1, len(bufPool.AllocatedBuffers))
 	verifyAllocatedBuffer(t, bufPool, block, true, 1, 1)
 
 	// Verify that the changes done during the first pinning are still visible after second pinning
@@ -99,27 +83,27 @@ func TestReuseAllocatedBuffer(t *testing.T) {
 	assert.Equal(t, int64(-345), pos2Value)
 
 	bufPool.UnpinBuffer(buf2)
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	verifyAllocatedBuffer(t, bufPool, block, false, 0, 1)
 }
 
 func TestBufferPinningAndUnpinning(t *testing.T) {
 	bufferCount := 3
-	db := NewDB(dbDir, blockTestSize, bufferCount)
+	db := server.NewDB(dbDir, blockTestSize, bufferCount)
 	createFile(db.FileMgr, filename)
 	defer removeFile(db.FileMgr.DbFilePath(filename), dbDir)
 	defer removeFile(db.FileMgr.DbFilePath(logFile), dbDir)
 
 	bufPool := db.BufPool
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	assert.Equal(t, bufferCount, bufPool.Available())
-	assert.Equal(t, 0, len(bufPool.allocatedBuffers))
+	assert.Equal(t, 0, len(bufPool.AllocatedBuffers))
 
 	block1 := file.GetBlock(filename, 1)
 	buf1 := bufPool.PinBuffer(block1)
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	assert.Equal(t, bufferCount-1, bufPool.Available())
-	assert.Equal(t, 1, len(bufPool.allocatedBuffers))
+	assert.Equal(t, 1, len(bufPool.AllocatedBuffers))
 	verifyAllocatedBuffer(t, bufPool, block1, true, 1, -1)
 
 	page := buf1.Contents
@@ -128,41 +112,41 @@ func TestBufferPinningAndUnpinning(t *testing.T) {
 	buf1.SetModified(1, 0)
 
 	bufPool.UnpinBuffer(buf1)
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	assert.Equal(t, bufferCount, bufPool.Available())
-	assert.Equal(t, 1, len(bufPool.allocatedBuffers))
+	assert.Equal(t, 1, len(bufPool.AllocatedBuffers))
 	verifyAllocatedBuffer(t, bufPool, block1, false, 0, 1)
 
 	block2 := file.GetBlock(filename, 2)
 	buf2 := bufPool.PinBuffer(block2)
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	assert.Equal(t, bufferCount-1, bufPool.Available())
-	assert.Equal(t, 2, len(bufPool.allocatedBuffers))
+	assert.Equal(t, 2, len(bufPool.AllocatedBuffers))
 	verifyAllocatedBuffer(t, bufPool, block1, false, 0, 1)
 	verifyAllocatedBuffer(t, bufPool, block2, true, 1, -1)
 
 	block3 := file.GetBlock(filename, 3)
 	bufPool.PinBuffer(block3)
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	assert.Equal(t, bufferCount-2, bufPool.Available())
-	assert.Equal(t, 3, len(bufPool.allocatedBuffers))
+	assert.Equal(t, 3, len(bufPool.AllocatedBuffers))
 	verifyAllocatedBuffer(t, bufPool, block1, false, 0, 1)
 	verifyAllocatedBuffer(t, bufPool, block2, true, 1, -1)
 	verifyAllocatedBuffer(t, bufPool, block3, true, 1, -1)
 
 	block4 := file.GetBlock(filename, 4)
 	bufPool.PinBuffer(block4)
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	assert.Equal(t, 0, bufPool.Available())
-	assert.Equal(t, 3, len(bufPool.allocatedBuffers))
+	assert.Equal(t, 3, len(bufPool.AllocatedBuffers))
 	verifyAllocatedBuffer(t, bufPool, block2, true, 1, -1)
 	verifyAllocatedBuffer(t, bufPool, block3, true, 1, -1)
 	verifyAllocatedBuffer(t, bufPool, block4, true, 1, -1)
 
 	bufPool.UnpinBuffer(buf2)
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	assert.Equal(t, 1, bufPool.Available())
-	assert.Equal(t, 3, len(bufPool.allocatedBuffers))
+	assert.Equal(t, 3, len(bufPool.AllocatedBuffers))
 	verifyAllocatedBuffer(t, bufPool, block2, false, 0, -1)
 	verifyAllocatedBuffer(t, bufPool, block3, true, 1, -1)
 	verifyAllocatedBuffer(t, bufPool, block4, true, 1, -1)
@@ -171,24 +155,24 @@ func TestBufferPinningAndUnpinning(t *testing.T) {
 	page2 := buf.Contents
 	page2.SetInt(80, 9999)
 	buf.SetModified(1, 0)
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	assert.Equal(t, 0, bufPool.Available())
-	assert.Equal(t, 3, len(bufPool.allocatedBuffers))
+	assert.Equal(t, 3, len(bufPool.AllocatedBuffers))
 	verifyAllocatedBuffer(t, bufPool, block1, true, 1, 1)
 	verifyAllocatedBuffer(t, bufPool, block3, true, 1, -1)
 	verifyAllocatedBuffer(t, bufPool, block4, true, 1, -1)
 }
 
-func verifyAllocatedBuffer(t *testing.T, bufPool *BufferPool, block file.Block, isPinned bool, pinCount int, txNum int64) {
-	buf := bufPool.allocatedBuffers[block.String()]
-	assert.Equal(t, isPinned, buf.isPinned())
-	assert.Equal(t, pinCount, buf.pins)
-	assert.Equal(t, txNum, buf.txNum)
+func verifyAllocatedBuffer(t *testing.T, bufPool *buffer.BufferPool, block file.Block, isPinned bool, pinCount int, txNum int64) {
+	buf := bufPool.AllocatedBuffers[block.String()]
+	assert.Equal(t, isPinned, buf.IsPinned())
+	assert.Equal(t, pinCount, buf.Pins)
+	assert.Equal(t, txNum, buf.TxNum)
 }
 
 func TestFailedPinWhenBufferNotFree(t *testing.T) {
 	bufferCount := 3
-	db := NewDB(dbDir, blockTestSize, bufferCount)
+	db := server.NewDB(dbDir, blockTestSize, bufferCount)
 	createFile(db.FileMgr, filename)
 	defer removeFile(db.FileMgr.DbFilePath(filename), dbDir)
 	defer removeFile(db.FileMgr.DbFilePath(logFile), dbDir)
@@ -198,16 +182,16 @@ func TestFailedPinWhenBufferNotFree(t *testing.T) {
 	block1 := file.GetBlock(filename, 1)
 	block2 := file.GetBlock(filename, 2)
 	block3 := file.GetBlock(filename, 3)
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	assert.Equal(t, bufferCount, bufPool.Available())
-	assert.Equal(t, 0, len(bufPool.allocatedBuffers))
+	assert.Equal(t, 0, len(bufPool.AllocatedBuffers))
 
 	bufPool.PinBuffer(block0)
 	buf1 := bufPool.PinBuffer(block1)
 	buf2 := bufPool.PinBuffer(block2)
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	assert.Equal(t, 0, bufPool.Available())
-	assert.Equal(t, bufferCount, len(bufPool.allocatedBuffers))
+	assert.Equal(t, bufferCount, len(bufPool.AllocatedBuffers))
 	verifyAllocatedBuffer(t, bufPool, block0, true, 1, -1)
 	verifyAllocatedBuffer(t, bufPool, block1, true, 1, -1)
 	verifyAllocatedBuffer(t, bufPool, block2, true, 1, -1)
@@ -215,7 +199,7 @@ func TestFailedPinWhenBufferNotFree(t *testing.T) {
 	bufPool.UnpinBuffer(buf1)
 	bufPool.PinBuffer(block0)
 	bufPool.PinBuffer(block1)
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	verifyAllocatedBuffer(t, bufPool, block0, true, 2, -1)
 	verifyAllocatedBuffer(t, bufPool, block1, true, 1, -1)
 	verifyAllocatedBuffer(t, bufPool, block2, true, 1, -1)
@@ -226,7 +210,7 @@ func TestFailedPinWhenBufferNotFree(t *testing.T) {
 	// If we Unpin a buffer and try again, it should succeed
 	bufPool.UnpinBuffer(buf2)
 	assert.NotNil(t, bufPool.PinBuffer(block3))
-	bufPool.printStatus()
+	bufPool.PrintStatus()
 	verifyAllocatedBuffer(t, bufPool, block0, true, 2, -1)
 	verifyAllocatedBuffer(t, bufPool, block1, true, 1, -1)
 	verifyAllocatedBuffer(t, bufPool, block3, true, 1, -1)
@@ -234,7 +218,7 @@ func TestFailedPinWhenBufferNotFree(t *testing.T) {
 
 func TestFlushAll(t *testing.T) {
 	bufferCount := 3
-	db := NewDB(dbDir, blockTestSize, bufferCount)
+	db := server.NewDB(dbDir, blockTestSize, bufferCount)
 	createFile(db.FileMgr, filename)
 	defer removeFile(db.FileMgr.DbFilePath(filename), dbDir)
 	defer removeFile(db.FileMgr.DbFilePath(logFile), dbDir)

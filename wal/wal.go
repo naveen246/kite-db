@@ -9,10 +9,10 @@ import (
 
 /*
 A Log keeps track of any changes in the database so that the change can be reversed.
-Each change is stored as a logRecord(byte slice) in a logFile.
-New logRecords are appended to the end of the logFile.
+Each change is stored as a logRecord(byte slice) in a LogFile.
+New logRecords are appended to the end of the LogFile.
 
-Data is appended in reverse order in each block of the logFile
+Data is appended in reverse order in each block of the LogFile
 Below is an example of how the log sequence numbers would look when we append 15 items
 +-------------+--------------------+---------------------+
 | 3, 2, 1, 0  |  9, 8, 7, 6, 5, 4  |  14, 13, 12, 11, 10 |
@@ -20,7 +20,7 @@ Below is an example of how the log sequence numbers would look when we append 15
 | Block 0     |  Block 1           |  Block 2            |
 +-------------+--------------------+---------------------+
 
-logFile is read from latest to oldest data as follows,
+LogFile is read from latest to oldest data as follows,
 Block 2 is read first (14-10)
 Block 1 is read next (9-4)
 Block 0 is read next (3-0)
@@ -45,11 +45,11 @@ The first 8 bytes of all blocks are reserved for the position/offset of the last
 */
 
 // Log is responsible for writing log records into a log file.
-// New records are appended to memory(logPage) and flushed to disk(logFile) when needed
+// New records are appended to memory(logPage) and flushed to disk(LogFile) when needed
 type Log struct {
 	sync.Mutex
 	fileMgr      file.FileMgr
-	logFile      string
+	LogFile      string
 	currentBlock file.Block
 	logPage      *file.Page
 
@@ -60,22 +60,22 @@ type Log struct {
 	lastSavedLogSeqNum int
 }
 
-// NewLog creates manager for specified logFile
-// if logFile does not exist, create file with an empty first block
+// NewLog creates manager for specified LogFile
+// if LogFile does not exist, create file with an empty first block
 func NewLog(fileMgr file.FileMgr, logFile string) *Log {
 	page := file.NewPageWithSize(fileMgr.BlockSize)
 	log := &Log{
 		fileMgr: fileMgr,
-		logFile: logFile,
+		LogFile: logFile,
 		logPage: page,
 	}
 
 	blockCount := fileMgr.BlockCount(logFile)
 	if blockCount == 0 {
-		// logFile is a new file so we append new block to file
+		// LogFile is a new file so we append new block to file
 		log.currentBlock = log.appendNewBlock()
 	} else {
-		// logFile is an existing file so we get the last block of the file
+		// LogFile is an existing file so we get the last block of the file
 		// and read the last block contents to logPage
 		log.currentBlock = file.GetBlock(logFile, blockCount-1)
 		err := fileMgr.Read(log.currentBlock, log.logPage)
@@ -122,15 +122,15 @@ func (l *Log) Append(logRecord []byte) int {
 }
 
 func (l *Log) appendNewBlock() file.Block {
-	block, err := l.fileMgr.Append(l.logFile)
+	block, err := l.fileMgr.Append(l.LogFile)
 	if err != nil {
-		log2.Fatalf("Failed to create new block in file %v - %v\n", l.logFile, err)
+		log2.Fatalf("Failed to create new block in file %v - %v\n", l.LogFile, err)
 	}
 
 	l.saveLastRecordPos(l.fileMgr.BlockSize)
 	err = l.fileMgr.Write(block, l.logPage)
 	if err != nil {
-		log2.Fatalf("Failed to write page to newly created block in file %v - %v\n", l.logFile, err)
+		log2.Fatalf("Failed to write page to newly created block in file %v - %v\n", l.LogFile, err)
 	}
 	return block
 }
@@ -154,7 +154,7 @@ func (l *Log) lastRecordPos() (int64, error) {
 func (l *Log) flush() {
 	err := l.fileMgr.Write(l.currentBlock, l.logPage)
 	if err != nil {
-		log2.Fatalf("Failed to flush to file %v - %v\n", l.logFile, err)
+		log2.Fatalf("Failed to flush to file %v - %v\n", l.LogFile, err)
 	}
 	l.lastSavedLogSeqNum = l.latestLogSeqNum
 }

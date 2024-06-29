@@ -40,14 +40,14 @@ func TestNewLog(t *testing.T) {
 	log := NewLog(fileMgr, tempFileName)
 	assert.Equal(t, int64(0), log.currentBlock.Number)
 	assert.Equal(t, blockTestSize, log.logPage.Size)
-	assert.Equal(t, tempFileName, log.logFile)
+	assert.Equal(t, tempFileName, log.LogFile)
 	removeFile(fileMgr.DbFilePath(tempFileName), fileMgr.DbDir)
 
 	fileMgr = createFile(tempFileName)
 	log = NewLog(fileMgr, tempFileName)
 	assert.Equal(t, int64(0), log.currentBlock.Number)
 	assert.Equal(t, blockTestSize, log.logPage.Size)
-	assert.Equal(t, tempFileName, log.logFile)
+	assert.Equal(t, tempFileName, log.LogFile)
 	removeFile(fileMgr.DbFilePath(tempFileName), fileMgr.DbDir)
 }
 

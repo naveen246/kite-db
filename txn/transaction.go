@@ -19,10 +19,10 @@ func nextTxNumber() TxID {
 }
 
 type Transaction struct {
-	txNum       TxID
+	TxNum       TxID
 	bufferPool  *buffer.BufferPool
 	fileMgr     file.FileMgr
-	concurMgr   *concurrencyMgr
+	ConcurMgr   *concurrencyMgr
 	recoveryMgr *RecoveryMgr
 	buffers     *BufferList
 }
@@ -31,28 +31,32 @@ func NewTransaction(fileMgr file.FileMgr, log *wal.Log, bufferPool *buffer.Buffe
 	tx := &Transaction{}
 	tx.bufferPool = bufferPool
 	tx.fileMgr = fileMgr
-	tx.txNum = nextTxNumber()
-	tx.concurMgr = newConcurrencyMgr()
-	tx.recoveryMgr = NewRecoveryMgr(tx, tx.txNum, log, bufferPool)
+	tx.TxNum = nextTxNumber()
+	tx.ConcurMgr = newConcurrencyMgr()
+	tx.recoveryMgr = NewRecoveryMgr(tx, tx.TxNum, log, bufferPool)
 	tx.buffers = NewBufferList(bufferPool)
 	return tx
 }
 
 func (tx *Transaction) Commit() {
 	tx.recoveryMgr.commit()
-	tx.concurMgr.releaseLocks(tx.txNum)
+	tx.ConcurMgr.ReleaseLocks(tx.TxNum)
 	tx.buffers.unpinAll()
 }
 
 func (tx *Transaction) Rollback() {
 	tx.recoveryMgr.rollback()
-	tx.concurMgr.releaseLocks(tx.txNum)
+	tx.ConcurMgr.ReleaseLocks(tx.TxNum)
 	tx.buffers.unpinAll()
 }
 
-func (tx *Transaction) Recover() {
-	tx.bufferPool.FlushAll(int64(tx.txNum))
-	tx.recoveryMgr.recover()
+func (tx *Transaction) Recover() error {
+	tx.bufferPool.FlushAll(int64(tx.TxNum))
+	err := tx.recoveryMgr.recover()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (tx *Transaction) Pin(block file.Block) {
@@ -64,7 +68,7 @@ func (tx *Transaction) Unpin(block file.Block) {
 }
 
 func (tx *Transaction) GetInt(block file.Block, offset int) (int, error) {
-	err := tx.concurMgr.sLock(block, tx.txNum)
+	err := tx.ConcurMgr.sLock(block, tx.TxNum)
 	if err != nil {
 		return 0, err
 	}
@@ -79,7 +83,7 @@ func (tx *Transaction) GetInt(block file.Block, offset int) (int, error) {
 }
 
 func (tx *Transaction) GetString(block file.Block, offset int) (string, error) {
-	err := tx.concurMgr.sLock(block, tx.txNum)
+	err := tx.ConcurMgr.sLock(block, tx.TxNum)
 	if err != nil {
 		return "", err
 	}
@@ -93,8 +97,8 @@ func (tx *Transaction) GetString(block file.Block, offset int) (string, error) {
 	return val, nil
 }
 
-func (tx *Transaction) SetInt(block file.Block, offset int, val int, okToLog bool) error {
-	err := tx.concurMgr.xLock(block, tx.txNum)
+func (tx *Transaction) SetInt(block file.Block, offset int64, val int, okToLog bool) error {
+	err := tx.ConcurMgr.xLock(block, tx.TxNum)
 	if err != nil {
 		return err
 	}
@@ -105,17 +109,17 @@ func (tx *Transaction) SetInt(block file.Block, offset int, val int, okToLog boo
 		lsn = tx.recoveryMgr.setInt(buf, offset)
 	}
 
-	err = buf.Contents.SetInt(int64(offset), int64(val))
+	err = buf.Contents.SetInt(offset, int64(val))
 	if err != nil {
 		log.Fatalln("Transaction SetInt err:", err)
 	}
 
-	buf.SetModified(int64(tx.txNum), lsn)
+	buf.SetModified(int64(tx.TxNum), lsn)
 	return nil
 }
 
-func (tx *Transaction) SetString(block file.Block, offset int, val string, okToLog bool) error {
-	err := tx.concurMgr.xLock(block, tx.txNum)
+func (tx *Transaction) SetString(block file.Block, offset int64, val string, okToLog bool) error {
+	err := tx.ConcurMgr.xLock(block, tx.TxNum)
 	if err != nil {
 		return err
 	}
@@ -131,7 +135,7 @@ func (tx *Transaction) SetString(block file.Block, offset int, val string, okToL
 		log.Fatalln("Transaction SetString err:", err)
 	}
 
-	buf.SetModified(int64(tx.txNum), lsn)
+	buf.SetModified(int64(tx.TxNum), lsn)
 	return nil
 }
 
@@ -141,7 +145,7 @@ func (tx *Transaction) AvailableBuffers() int {
 
 func (tx *Transaction) Size(filename string) (int, error) {
 	eofBlock := file.GetBlock(filename, EndOfFile)
-	err := tx.concurMgr.sLock(eofBlock, tx.txNum)
+	err := tx.ConcurMgr.sLock(eofBlock, tx.TxNum)
 	if err != nil {
 		return 0, err
 	}
@@ -151,7 +155,7 @@ func (tx *Transaction) Size(filename string) (int, error) {
 
 func (tx *Transaction) Append(filename string) (file.Block, error) {
 	eofBlock := file.GetBlock(filename, EndOfFile)
-	err := tx.concurMgr.xLock(eofBlock, tx.txNum)
+	err := tx.ConcurMgr.xLock(eofBlock, tx.TxNum)
 	if err != nil {
 		return file.Block{}, err
 	}
@@ -177,7 +181,9 @@ type BufferList struct {
 
 func NewBufferList(pool *buffer.BufferPool) *BufferList {
 	return &BufferList{
-		bufPool: pool,
+		bufPool:  pool,
+		buffers:  make(map[file.Block]*buffer.Buffer),
+		pinCount: make(map[file.Block]int),
 	}
 }
 

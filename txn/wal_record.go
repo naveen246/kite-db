@@ -19,7 +19,7 @@ const (
 type LogRecord interface {
 	recordType() int
 	txNumber() TxID
-	undo(tx *Transaction)
+	undo(tx *Transaction) error
 }
 
 func createLogRecord(bytes []byte) LogRecord {
@@ -64,13 +64,15 @@ func (c CheckpointRecord) txNumber() TxID {
 	return -1
 }
 
-func (c CheckpointRecord) undo(tx *Transaction) {}
+func (c CheckpointRecord) undo(tx *Transaction) error {
+	return nil
+}
 
 func (c CheckpointRecord) String() string {
 	return "<CHECKPOINT>"
 }
 
-func writeCheckPointToLog(log *wal.Log) int {
+func WriteCheckPointToLog(log *wal.Log) int {
 	record := make([]byte, file.IntSize)
 	page := file.NewPageWithBytes(record)
 	err := page.SetInt(0, CheckPoint)
@@ -104,13 +106,15 @@ func (s StartRecord) txNumber() TxID {
 	return s.txNum
 }
 
-func (s StartRecord) undo(tx *Transaction) {}
+func (s StartRecord) undo(tx *Transaction) error {
+	return nil
+}
 
 func (s StartRecord) String() string {
 	return fmt.Sprintf("<START %v>", s.txNum)
 }
 
-func writeStartRecToLog(log *wal.Log, txNum TxID) int {
+func WriteStartRecToLog(log *wal.Log, txNum TxID) int {
 	record := make([]byte, 2*file.IntSize)
 	page := file.NewPageWithBytes(record)
 
@@ -150,13 +154,15 @@ func (c CommitRecord) txNumber() TxID {
 	return c.txNum
 }
 
-func (c CommitRecord) undo(tx *Transaction) {}
+func (c CommitRecord) undo(tx *Transaction) error {
+	return nil
+}
 
 func (c CommitRecord) String() string {
 	return fmt.Sprintf("<COMMIT %v>", c.txNum)
 }
 
-func writeCommitRecToLog(log *wal.Log, txNum TxID) int {
+func WriteCommitRecToLog(log *wal.Log, txNum TxID) int {
 	record := make([]byte, 2*file.IntSize)
 	page := file.NewPageWithBytes(record)
 
@@ -196,13 +202,15 @@ func (r RollbackRecord) txNumber() TxID {
 	return r.txNum
 }
 
-func (r RollbackRecord) undo(tx *Transaction) {}
+func (r RollbackRecord) undo(tx *Transaction) error {
+	return nil
+}
 
 func (r RollbackRecord) String() string {
 	return fmt.Sprintf("<ROLLBACK %v>", r.txNum)
 }
 
-func writeRollbackRecToLog(log *wal.Log, txNum TxID) int {
+func WriteRollbackRecToLog(log *wal.Log, txNum TxID) int {
 	errMsg := "Failed to write Rollback record to Log: "
 	record := make([]byte, 2*file.IntSize)
 	page := file.NewPageWithBytes(record)
@@ -223,7 +231,7 @@ func writeRollbackRecToLog(log *wal.Log, txNum TxID) int {
 
 type SetIntRecord struct {
 	txNum  TxID
-	offset int
+	offset int64
 	val    int
 	block  file.Block
 }
@@ -262,7 +270,7 @@ func newSetIntRecord(page *file.Page) SetIntRecord {
 
 	return SetIntRecord{
 		txNum:  TxID(txNumber),
-		offset: int(offset),
+		offset: offset,
 		val:    int(val),
 		block:  file.GetBlock(filename, blockNum),
 	}
@@ -276,20 +284,21 @@ func (s SetIntRecord) txNumber() TxID {
 	return s.txNum
 }
 
-func (s SetIntRecord) undo(tx *Transaction) {
+func (s SetIntRecord) undo(tx *Transaction) error {
 	tx.Pin(s.block)
 	err := tx.SetInt(s.block, s.offset, s.val, false)
 	if err != nil {
-		log2.Fatalln("Failed to undo SetInt: ", err)
+		return err
 	}
 	tx.Unpin(s.block)
+	return nil
 }
 
 func (s SetIntRecord) String() string {
 	return fmt.Sprintf("<SETINT %v %v %v %v>", s.txNum, s.block, s.offset, s.val)
 }
 
-func writeSetIntRecToLog(log *wal.Log, txNum TxID, block file.Block, offset int, val int) int {
+func writeSetIntRecToLog(log *wal.Log, txNum TxID, block file.Block, offset int64, val int) int {
 	errMsg := "Failed to write SetInt record to Log: "
 	filenameLen := file.MaxLen(len(block.Filename))
 	record := make([]byte, 5*file.IntSize+filenameLen)
@@ -320,7 +329,7 @@ func writeSetIntRecToLog(log *wal.Log, txNum TxID, block file.Block, offset int,
 	}
 
 	position += file.IntSize
-	err = page.SetInt(position, int64(offset))
+	err = page.SetInt(position, offset)
 	if err != nil {
 		log2.Fatalln(errMsg, err)
 	}
@@ -338,7 +347,7 @@ func writeSetIntRecToLog(log *wal.Log, txNum TxID, block file.Block, offset int,
 
 type SetStringRecord struct {
 	txNum  TxID
-	offset int
+	offset int64
 	val    string
 	block  file.Block
 }
@@ -377,7 +386,7 @@ func newSetStringRecord(page *file.Page) SetStringRecord {
 
 	return SetStringRecord{
 		txNum:  TxID(txNumber),
-		offset: int(offset),
+		offset: offset,
 		val:    val,
 		block:  file.GetBlock(filename, blockNum),
 	}
@@ -391,20 +400,21 @@ func (s SetStringRecord) txNumber() TxID {
 	return s.txNum
 }
 
-func (s SetStringRecord) undo(tx *Transaction) {
+func (s SetStringRecord) undo(tx *Transaction) error {
 	tx.Pin(s.block)
 	err := tx.SetString(s.block, s.offset, s.val, false)
 	if err != nil {
-		log2.Fatalln("Failed to undo SetString: ", err)
+		return err
 	}
 	tx.Unpin(s.block)
+	return nil
 }
 
 func (s SetStringRecord) String() string {
 	return fmt.Sprintf("<SETSTRING %v %v %v %v>", s.txNum, s.block, s.offset, s.val)
 }
 
-func writeSetStringRecToLog(log *wal.Log, txNum TxID, block file.Block, offset int, val string) int {
+func writeSetStringRecToLog(log *wal.Log, txNum TxID, block file.Block, offset int64, val string) int {
 	errMsg := "Failed to write SetString record to Log: "
 	filenameLen := file.MaxLen(len(block.Filename))
 	valueLen := file.MaxLen(len(val))
@@ -436,7 +446,7 @@ func writeSetStringRecToLog(log *wal.Log, txNum TxID, block file.Block, offset i
 	}
 
 	position += file.IntSize
-	err = page.SetInt(position, int64(offset))
+	err = page.SetInt(position, offset)
 	if err != nil {
 		log2.Fatalln(errMsg, err)
 	}

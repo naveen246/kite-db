@@ -6,7 +6,7 @@ import (
 )
 
 // LogIterator provides the ability to move from latest to oldest log record
-// This becomes easy since data is appended in reverse order in each block of the logFile
+// This becomes easy since data is appended in reverse order in each block of the LogFile
 type LogIterator struct {
 	fileMgr    file.FileMgr
 	block      file.Block
