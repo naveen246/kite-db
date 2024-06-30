@@ -37,7 +37,8 @@ func (l *lockTable) sLock(block file.Block, txNum TxID) error {
 		otherTxHasXLock := false
 		hasOlderTx := false
 		l.mu.RLock()
-		txLocks := l.locks[block]
+		txLocks := make([]txLock, len(l.locks[block]))
+		copy(txLocks, l.locks[block])
 		l.mu.RUnlock()
 		for _, txLock := range txLocks {
 			if txLock.lkType == exclusiveLock {
@@ -71,7 +72,8 @@ func (l *lockTable) xLock(block file.Block, txNum TxID) error {
 		otherTxHasAnyLock := false
 		hasOlderTx := false
 		l.mu.RLock()
-		txLocks := l.locks[block]
+		txLocks := make([]txLock, len(l.locks[block]))
+		copy(txLocks, l.locks[block])
 		l.mu.RUnlock()
 		for _, txLock := range txLocks {
 			if txLock.txId != txNum {
