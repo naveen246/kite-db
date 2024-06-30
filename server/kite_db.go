@@ -12,7 +12,7 @@ var (
 )
 
 type DB struct {
-	FileMgr file.FileMgr
+	FileMgr *file.FileMgr
 	Log     *wal.Log
 	BufPool *buffer.BufferPool
 }

@@ -14,7 +14,7 @@ var tempFileName = "temp_file"
 
 // createFile creates file temp_dir/filename
 // and populates file with 100 bytes each of a, b, c
-func createFile(filename string) (*os.File, FileMgr) {
+func createFile(filename string) (*os.File, *FileMgr) {
 	fileMgr := NewFileMgr("temp_dir", blockTestSize)
 	file, err := os.Create(fileMgr.DbFilePath(filename))
 	if err != nil {

@@ -72,7 +72,7 @@ func (c CheckpointRecord) String() string {
 	return "<CHECKPOINT>"
 }
 
-func WriteCheckPointToLog(log *wal.Log) int {
+func WriteCheckPointToLog(log *wal.Log) int64 {
 	record := make([]byte, file.IntSize)
 	page := file.NewPageWithBytes(record)
 	err := page.SetInt(0, CheckPoint)
@@ -114,7 +114,7 @@ func (s StartRecord) String() string {
 	return fmt.Sprintf("<START %v>", s.txNum)
 }
 
-func WriteStartRecToLog(log *wal.Log, txNum TxID) int {
+func WriteStartRecToLog(log *wal.Log, txNum TxID) int64 {
 	record := make([]byte, 2*file.IntSize)
 	page := file.NewPageWithBytes(record)
 
@@ -162,7 +162,7 @@ func (c CommitRecord) String() string {
 	return fmt.Sprintf("<COMMIT %v>", c.txNum)
 }
 
-func WriteCommitRecToLog(log *wal.Log, txNum TxID) int {
+func WriteCommitRecToLog(log *wal.Log, txNum TxID) int64 {
 	record := make([]byte, 2*file.IntSize)
 	page := file.NewPageWithBytes(record)
 
@@ -210,7 +210,7 @@ func (r RollbackRecord) String() string {
 	return fmt.Sprintf("<ROLLBACK %v>", r.txNum)
 }
 
-func WriteRollbackRecToLog(log *wal.Log, txNum TxID) int {
+func WriteRollbackRecToLog(log *wal.Log, txNum TxID) int64 {
 	errMsg := "Failed to write Rollback record to Log: "
 	record := make([]byte, 2*file.IntSize)
 	page := file.NewPageWithBytes(record)
@@ -298,7 +298,7 @@ func (s SetIntRecord) String() string {
 	return fmt.Sprintf("<SETINT %v %v %v %v>", s.txNum, s.block, s.offset, s.val)
 }
 
-func writeSetIntRecToLog(log *wal.Log, txNum TxID, block file.Block, offset int64, val int) int {
+func writeSetIntRecToLog(log *wal.Log, txNum TxID, block file.Block, offset int64, val int) int64 {
 	errMsg := "Failed to write SetInt record to Log: "
 	filenameLen := file.MaxLen(len(block.Filename))
 	record := make([]byte, 5*file.IntSize+filenameLen)
@@ -414,7 +414,7 @@ func (s SetStringRecord) String() string {
 	return fmt.Sprintf("<SETSTRING %v %v %v %v>", s.txNum, s.block, s.offset, s.val)
 }
 
-func writeSetStringRecToLog(log *wal.Log, txNum TxID, block file.Block, offset int64, val string) int {
+func writeSetStringRecToLog(log *wal.Log, txNum TxID, block file.Block, offset int64, val string) int64 {
 	errMsg := "Failed to write SetString record to Log: "
 	filenameLen := file.MaxLen(len(block.Filename))
 	valueLen := file.MaxLen(len(val))

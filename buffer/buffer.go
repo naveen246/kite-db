@@ -10,7 +10,7 @@ import (
 // such as the associated disk block, the number of times the buffer has been pinned,
 // whether its contents have been modified, and if so, the id and logSequenceNumber of the modifying transaction.
 type Buffer struct {
-	fileMgr file.FileMgr
+	fileMgr *file.FileMgr
 	log     *wal.Log
 
 	// The main content of the buffer which is accessed by clients to read/write data
@@ -26,10 +26,10 @@ type Buffer struct {
 	// has to be flushed to disk at some point.
 	// Initial value is -1 when there is no change in the buffer page
 	TxNum     int64
-	logSeqNum int
+	logSeqNum int64
 }
 
-func NewBuffer(id string, fileMgr file.FileMgr, log *wal.Log) *Buffer {
+func NewBuffer(id string, fileMgr *file.FileMgr, log *wal.Log) *Buffer {
 	page := file.NewPageWithSize(fileMgr.BlockSize)
 	return &Buffer{
 		ID:        id,
@@ -44,7 +44,7 @@ func NewBuffer(id string, fileMgr file.FileMgr, log *wal.Log) *Buffer {
 
 // SetModified is called when there is modification done in-memory to the buffer page.
 // This indicates that the buffer page is dirty and will need to be flushed to disk at some point to persist the changes done.
-func (b *Buffer) SetModified(txNum int64, lsn int) {
+func (b *Buffer) SetModified(txNum int64, lsn int64) {
 	b.TxNum = txNum
 	if lsn >= 0 {
 		b.logSeqNum = lsn

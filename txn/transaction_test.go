@@ -7,12 +7,11 @@ import (
 
 var (
 	blockTestSize int64 = 400
-	logFile             = "simpledb.log"
 	dbDir               = "txTest"
 	filename            = "testFile"
 )
 
-func createFile(fileMgr file.FileMgr, filename string) {
+func createFile(fileMgr *file.FileMgr, filename string) {
 	f, _ := os.Create(fileMgr.DbFilePath(filename))
 	f.Truncate(1e5)
 }

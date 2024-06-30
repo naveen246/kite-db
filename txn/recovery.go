@@ -73,7 +73,7 @@ func (r *RecoveryMgr) recover() error {
 	return nil
 }
 
-func (r *RecoveryMgr) setInt(buf *buffer.Buffer, offset int64) int {
+func (r *RecoveryMgr) setInt(buf *buffer.Buffer, offset int64) int64 {
 	oldVal, err := buf.Contents.GetInt(offset)
 	if err != nil {
 		log.Fatalln("Failed to write setInt record to log:", err)
@@ -82,7 +82,7 @@ func (r *RecoveryMgr) setInt(buf *buffer.Buffer, offset int64) int {
 	return writeSetIntRecToLog(r.log, r.txNum, buf.Block, offset, int(oldVal))
 }
 
-func (r *RecoveryMgr) setString(buf *buffer.Buffer, offset int64) int {
+func (r *RecoveryMgr) setString(buf *buffer.Buffer, offset int64) int64 {
 	oldVal, err := buf.Contents.GetString(offset)
 	if err != nil {
 		log.Fatalln("Failed to write setString record to log:", err)

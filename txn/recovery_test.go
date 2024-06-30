@@ -12,7 +12,7 @@ func TestRollbackAndRecovery(t *testing.T) {
 	db := server.NewDB(dbDir, blockTestSize, 8)
 	createFile(db.FileMgr, filename)
 	defer removeFile(db.FileMgr.DbFilePath(filename), dbDir)
-	defer removeFile(db.FileMgr.DbFilePath(logFile), dbDir)
+	defer removeFile(db.FileMgr.DbFilePath(db.Log.LogFile), dbDir)
 
 	// Initialize data in block0 and block1
 	initial := []int64{0, 1, 2, 3, 4, 5}

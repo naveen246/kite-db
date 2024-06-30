@@ -3,7 +3,7 @@ package wal
 import (
 	"github.com/naveen246/kite-db/file"
 	"github.com/stretchr/testify/assert"
-	"log"
+	log2 "log"
 	"os"
 	"testing"
 )
@@ -16,11 +16,11 @@ var dbDir = "temp_dir"
 
 // createFile creates file temp_dir/filename
 // and adds 1 logRecord which fills the complete first block in the file
-func createFile(filename string) file.FileMgr {
+func createFile(filename string) *file.FileMgr {
 	fileMgr := file.NewFileMgr(dbDir, blockTestSize)
 	_, err := os.Create(fileMgr.DbFilePath(filename))
 	if err != nil {
-		log.Fatal(err)
+		log2.Fatal(err)
 	}
 
 	page := file.NewPageWithSize(blockTestSize)
@@ -61,7 +61,7 @@ func TestLogAppend(t *testing.T) {
 		text       string
 		blockNum   int64
 		lastRecPos int64
-		lsn        int
+		lsn        int64
 	}{
 		// TODO: These values depend on block size. Remove hardcoded values and calculate values
 		{text: text[0], blockNum: 1, lastRecPos: 15, lsn: 1},
@@ -79,7 +79,7 @@ func TestLogAppend(t *testing.T) {
 
 		data, _ := log.logPage.GetBytes(recordPos)
 		assert.Equal(t, tt.text, string(data))
-		assert.Equal(t, tt.lsn, log.latestLogSeqNum)
+		assert.Equal(t, tt.lsn, log.latestLogSeqNum.Load())
 	}
 }
 
@@ -102,16 +102,16 @@ func TestLogFlush(t *testing.T) {
 	defer removeFile(fileMgr.DbFilePath(tempFileName), fileMgr.DbDir)
 	log := NewLog(fileMgr, tempFileName)
 
-	assert.Equal(t, 0, log.latestLogSeqNum)
-	assert.Equal(t, 0, log.lastSavedLogSeqNum)
+	assert.Equal(t, int64(0), log.latestLogSeqNum.Load())
+	assert.Equal(t, int64(0), log.lastSavedLogSeqNum.Load())
 
 	log.Append([]byte("abcde"))
-	assert.Equal(t, 1, log.latestLogSeqNum)
-	assert.Equal(t, 0, log.lastSavedLogSeqNum)
+	assert.Equal(t, int64(1), log.latestLogSeqNum.Load())
+	assert.Equal(t, int64(0), log.lastSavedLogSeqNum.Load())
 
 	log.Flush(1)
-	assert.Equal(t, 1, log.latestLogSeqNum)
-	assert.Equal(t, 1, log.lastSavedLogSeqNum)
+	assert.Equal(t, int64(1), log.latestLogSeqNum.Load())
+	assert.Equal(t, int64(1), log.lastSavedLogSeqNum.Load())
 }
 
 func TestLogIterator(t *testing.T) {

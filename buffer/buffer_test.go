@@ -16,7 +16,7 @@ const (
 	filename      = "testFile"
 )
 
-func createFile(fileMgr file.FileMgr, filename string) {
+func createFile(fileMgr *file.FileMgr, filename string) {
 	f, _ := os.Create(fileMgr.DbFilePath(filename))
 	f.Truncate(1e5)
 }

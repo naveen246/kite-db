@@ -4,6 +4,7 @@ import (
 	"github.com/naveen246/kite-db/buffer"
 	"github.com/naveen246/kite-db/file"
 	"github.com/naveen246/kite-db/wal"
+	"github.com/sasha-s/go-deadlock"
 	"log"
 )
 
@@ -11,23 +12,28 @@ const EndOfFile = -1
 
 type TxID int64
 
-var nextTxNum TxID
+var nextTxNum struct {
+	deadlock.Mutex
+	txID TxID
+}
 
 func nextTxNumber() TxID {
-	nextTxNum++
-	return nextTxNum
+	nextTxNum.Lock()
+	defer nextTxNum.Unlock()
+	nextTxNum.txID++
+	return nextTxNum.txID
 }
 
 type Transaction struct {
 	TxNum       TxID
 	bufferPool  *buffer.BufferPool
-	fileMgr     file.FileMgr
+	fileMgr     *file.FileMgr
 	concurMgr   *concurrencyMgr
 	recoveryMgr *RecoveryMgr
 	buffers     *BufferList
 }
 
-func NewTransaction(fileMgr file.FileMgr, log *wal.Log, bufferPool *buffer.BufferPool) *Transaction {
+func NewTransaction(fileMgr *file.FileMgr, log *wal.Log, bufferPool *buffer.BufferPool) *Transaction {
 	tx := &Transaction{}
 	tx.bufferPool = bufferPool
 	tx.fileMgr = fileMgr
@@ -44,10 +50,14 @@ func (tx *Transaction) Commit() {
 	tx.buffers.unpinAll()
 }
 
-func (tx *Transaction) Rollback() {
-	tx.recoveryMgr.rollback()
+func (tx *Transaction) Rollback() error {
+	err := tx.recoveryMgr.rollback()
+	if err != nil {
+		return err
+	}
 	tx.ReleaseLocks()
 	tx.buffers.unpinAll()
+	return nil
 }
 
 func (tx *Transaction) Recover() error {
@@ -108,7 +118,7 @@ func (tx *Transaction) SetInt(block file.Block, offset int64, val int, okToLog b
 	}
 
 	buf := tx.buffers.getBuffer(block)
-	lsn := -1
+	var lsn int64 = -1
 	if okToLog {
 		lsn = tx.recoveryMgr.setInt(buf, offset)
 	}
@@ -129,7 +139,7 @@ func (tx *Transaction) SetString(block file.Block, offset int64, val string, okT
 	}
 
 	buf := tx.buffers.getBuffer(block)
-	lsn := -1
+	var lsn int64 = -1
 	if okToLog {
 		lsn = tx.recoveryMgr.setString(buf, offset)
 	}

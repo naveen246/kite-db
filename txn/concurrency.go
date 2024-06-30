@@ -3,6 +3,7 @@ package txn
 import (
 	"errors"
 	"github.com/naveen246/kite-db/file"
+	"github.com/sasha-s/go-deadlock"
 	"slices"
 	"sync"
 )
@@ -18,7 +19,7 @@ var lockTbl *lockTable
 var once sync.Once
 
 type lockTable struct {
-	mu    sync.Mutex
+	mu    deadlock.RWMutex
 	locks map[file.Block][]txLock
 }
 
@@ -32,12 +33,13 @@ func getLockTable() *lockTable {
 }
 
 func (l *lockTable) sLock(block file.Block, txNum TxID) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
 	for {
 		otherTxHasXLock := false
 		hasOlderTx := false
-		for _, txLock := range l.locks[block] {
+		l.mu.RLock()
+		txLocks := l.locks[block]
+		l.mu.RUnlock()
+		for _, txLock := range txLocks {
 			if txLock.lkType == exclusiveLock {
 				otherTxHasXLock = true
 			}
@@ -53,22 +55,25 @@ func (l *lockTable) sLock(block file.Block, txNum TxID) error {
 		}
 	}
 
+	l.mu.Lock()
 	l.locks[block] = append(l.locks[block], txLock{
 		txId:   txNum,
 		lkType: sharedLock,
 	})
+	l.mu.Unlock()
 	return nil
 }
 
 func (l *lockTable) xLock(block file.Block, txNum TxID) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
 
 	// Wait-die locking rule for deadlock avoidance
 	for {
 		otherTxHasAnyLock := false
 		hasOlderTx := false
-		for _, txLock := range l.locks[block] {
+		l.mu.RLock()
+		txLocks := l.locks[block]
+		l.mu.RUnlock()
+		for _, txLock := range txLocks {
 			if txLock.txId != txNum {
 				otherTxHasAnyLock = true
 			}
@@ -85,10 +90,12 @@ func (l *lockTable) xLock(block file.Block, txNum TxID) error {
 		}
 	}
 
+	l.mu.Lock()
 	l.locks[block] = append(l.locks[block], txLock{
 		txId:   txNum,
 		lkType: exclusiveLock,
 	})
+	l.mu.Unlock()
 	return nil
 }
 

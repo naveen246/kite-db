@@ -8,13 +8,13 @@ import (
 // LogIterator provides the ability to move from latest to oldest log record
 // This becomes easy since data is appended in reverse order in each block of the LogFile
 type LogIterator struct {
-	fileMgr    file.FileMgr
+	fileMgr    *file.FileMgr
 	block      file.Block
 	page       *file.Page
 	currentPos int64
 }
 
-func NewIterator(fileMgr file.FileMgr, block file.Block) *LogIterator {
+func NewIterator(fileMgr *file.FileMgr, block file.Block) *LogIterator {
 	page := file.NewPageWithSize(fileMgr.BlockSize)
 	iter := &LogIterator{
 		fileMgr: fileMgr,

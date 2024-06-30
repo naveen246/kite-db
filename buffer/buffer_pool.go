@@ -5,22 +5,22 @@ import (
 	"github.com/google/uuid"
 	"github.com/naveen246/kite-db/file"
 	"github.com/naveen246/kite-db/wal"
+	"github.com/sasha-s/go-deadlock"
 	"log"
 	"slices"
-	"sync"
 	"time"
 )
 
 // BufferPool Manages the pinning and unpinning of buffers to blocks.
 type BufferPool struct {
-	sync.Mutex
+	deadlock.Mutex
 	UnpinnedBuffers []*Buffer
 
 	// AllocatedBuffers maps Block to Buffer
 	AllocatedBuffers map[string]*Buffer
 }
 
-func NewBufferPool(fileMgr file.FileMgr, log *wal.Log, bufCount int) *BufferPool {
+func NewBufferPool(fileMgr *file.FileMgr, log *wal.Log, bufCount int) *BufferPool {
 	buffers := make([]*Buffer, bufCount)
 	for i := 0; i < bufCount; i++ {
 		buffers[i] = NewBuffer(uuid.NewString(), fileMgr, log)
