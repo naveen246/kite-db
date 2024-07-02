@@ -1,6 +1,7 @@
 package txn_test
 
 import (
+	"fmt"
 	"github.com/naveen246/kite-db/file"
 	"github.com/naveen246/kite-db/server"
 	"github.com/stretchr/testify/assert"
@@ -45,6 +46,7 @@ func TestTxn(t *testing.T) {
 	tx2.Pin(blk)
 	iVal, _ := tx2.GetInt(blk, 80)
 	sVal, _ := tx2.GetString(blk, 40)
+	fmt.Println(iVal, sVal)
 	assert.Equal(t, 1, iVal)
 	assert.Equal(t, "one", sVal)
 	newIVal := iVal + 1
@@ -59,6 +61,7 @@ func TestTxn(t *testing.T) {
 	tx3.Pin(blk)
 	iVal, _ = tx3.GetInt(blk, 80)
 	sVal, _ = tx3.GetString(blk, 40)
+	fmt.Println(iVal, sVal)
 	assert.Equal(t, 2, iVal)
 	assert.Equal(t, "one!", sVal)
 	tx3.SetInt(blk, 80, 9999, true)
@@ -66,10 +69,11 @@ func TestTxn(t *testing.T) {
 	assert.Equal(t, 9999, iVal)
 	tx3.Rollback()
 
-	// tx4: verify that tx3 changes were rolled back and we can see the old int value [intVal = 2]
+	// tx4: verify that tx3 changes were rolled back, and we can see the old int value [intVal = 2]
 	tx4 := db.NewTx()
 	tx4.Pin(blk)
 	iVal, _ = tx4.GetInt(blk, 80)
+	fmt.Println(iVal, sVal)
 	assert.Equal(t, 2, iVal)
 	tx4.Commit()
 }

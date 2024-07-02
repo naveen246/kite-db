@@ -186,8 +186,9 @@ func (tx *Transaction) BlockSize() int {
 	return int(tx.fileMgr.BlockSize)
 }
 
-// ********************************************************
+// ********************** BufferList **********************************
 
+// BufferList Manage the transaction's currently-pinned buffers.
 type BufferList struct {
 	buffers  map[file.Block]*buffer.Buffer
 	pinCount map[file.Block]int
@@ -202,16 +203,19 @@ func NewBufferList(pool *buffer.BufferPool) *BufferList {
 	}
 }
 
+// getBuffer Return the buffer pinned to the specified block.
 func (b *BufferList) getBuffer(block file.Block) *buffer.Buffer {
 	return b.buffers[block]
 }
 
+// pin the block and keep track of the buffer internally.
 func (b *BufferList) pin(block file.Block) {
 	buf := b.bufPool.PinBuffer(block)
 	b.buffers[block] = buf
 	b.pinCount[block] = b.pinCount[block] + 1
 }
 
+// unpin the specified block.
 func (b *BufferList) unpin(block file.Block) {
 	buf := b.buffers[block]
 	b.bufPool.UnpinBuffer(buf)
@@ -223,6 +227,9 @@ func (b *BufferList) unpin(block file.Block) {
 	}
 }
 
+// unpinAll Unpin all buffers still pinned by this transaction.
+// if a block has been pinned multiple times (pinCount) by a txn
+// then it should be unpinned the same number of times
 func (b *BufferList) unpinAll() {
 	for block, pinCount := range b.pinCount {
 		buf := b.buffers[block]

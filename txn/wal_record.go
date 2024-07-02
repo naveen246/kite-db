@@ -16,6 +16,7 @@ const (
 	SetString
 )
 
+// LogRecord The interface implemented by each type of log record
 type LogRecord interface {
 	recordType() int
 	txNumber() TxID
@@ -47,6 +48,8 @@ func createLogRecord(bytes []byte) LogRecord {
 
 /*************** CheckpointRecord ********************************************/
 
+// CheckpointRecord in log ->
+// <CheckPoint>
 type CheckpointRecord struct {
 }
 
@@ -59,11 +62,12 @@ func (c *CheckpointRecord) recordType() int {
 }
 
 // Checkpoint records have no associated transaction,
-// and so the method returns a "dummy", negative txid.
+// and so the method returns a "dummy", negative txID.
 func (c *CheckpointRecord) txNumber() TxID {
 	return -1
 }
 
+// Does nothing, because a checkpoint record contains no undo information.
 func (c *CheckpointRecord) undo(tx *Transaction) error {
 	return nil
 }
@@ -72,6 +76,9 @@ func (c *CheckpointRecord) String() string {
 	return "<CHECKPOINT>"
 }
 
+// WriteCheckPointToLog write a CheckPoint record to the log.
+// This log record contains the CheckPoint operator, and nothing else.
+// returns lsn of the appended CheckPoint record
 func WriteCheckPointToLog(log *wal.Log) int64 {
 	record := make([]byte, file.IntSize)
 	page := file.NewPageWithBytes(record)
@@ -84,6 +91,8 @@ func WriteCheckPointToLog(log *wal.Log) int64 {
 
 /*************** StartRecord *************************************************/
 
+// StartRecord in log ->
+// <Start, TxID>
 type StartRecord struct {
 	txNum TxID
 }
@@ -106,6 +115,7 @@ func (s *StartRecord) txNumber() TxID {
 	return s.txNum
 }
 
+// Does nothing, because a start record contains no undo information.
 func (s *StartRecord) undo(tx *Transaction) error {
 	return nil
 }
@@ -114,6 +124,9 @@ func (s *StartRecord) String() string {
 	return fmt.Sprintf("<START %v>", s.txNum)
 }
 
+// WriteStartRecToLog write a Start record to the log.
+// This log record contains the Start operator, followed by the transaction id.
+// returns lsn of the appended Start record
 func WriteStartRecToLog(log *wal.Log, txNum TxID) int64 {
 	record := make([]byte, 2*file.IntSize)
 	page := file.NewPageWithBytes(record)
@@ -132,6 +145,8 @@ func WriteStartRecToLog(log *wal.Log, txNum TxID) int64 {
 
 /*************** CommitRecord ************************************************/
 
+// CommitRecord in log ->
+// <Commit, TxID>
 type CommitRecord struct {
 	txNum TxID
 }
@@ -154,6 +169,7 @@ func (c *CommitRecord) txNumber() TxID {
 	return c.txNum
 }
 
+// Does nothing, because a commit record contains no undo information.
 func (c *CommitRecord) undo(tx *Transaction) error {
 	return nil
 }
@@ -162,6 +178,9 @@ func (c *CommitRecord) String() string {
 	return fmt.Sprintf("<COMMIT %v>", c.txNum)
 }
 
+// WriteCommitRecToLog write a Commit record to the log.
+// This log record contains the Commit operator, followed by the transaction id.
+// returns lsn of the appended Commit record
 func WriteCommitRecToLog(log *wal.Log, txNum TxID) int64 {
 	record := make([]byte, 2*file.IntSize)
 	page := file.NewPageWithBytes(record)
@@ -180,6 +199,8 @@ func WriteCommitRecToLog(log *wal.Log, txNum TxID) int64 {
 
 /*************** RollbackRecord **********************************************/
 
+// RollbackRecord in log ->
+// <Rollback, TxID>
 type RollbackRecord struct {
 	txNum TxID
 }
@@ -202,6 +223,7 @@ func (r *RollbackRecord) txNumber() TxID {
 	return r.txNum
 }
 
+// Does nothing, because a rollback record contains no undo information.
 func (r *RollbackRecord) undo(tx *Transaction) error {
 	return nil
 }
@@ -210,6 +232,9 @@ func (r *RollbackRecord) String() string {
 	return fmt.Sprintf("<ROLLBACK %v>", r.txNum)
 }
 
+// WriteRollbackRecToLog write a Rollback record to the log.
+// This log record contains the Rollback operator, followed by the transaction id.
+// returns lsn of the appended Rollback record
 func WriteRollbackRecToLog(log *wal.Log, txNum TxID) int64 {
 	errMsg := "Failed to write Rollback record to Log: "
 	record := make([]byte, 2*file.IntSize)
@@ -229,6 +254,8 @@ func WriteRollbackRecToLog(log *wal.Log, txNum TxID) int64 {
 
 /*************** SetIntRecord ************************************************/
 
+// SetIntRecord in log ->
+// <SetInt, TxID, filename, blockNumber, offset, value>
 type SetIntRecord struct {
 	txNum  TxID
 	offset int64
@@ -284,6 +311,9 @@ func (s *SetIntRecord) txNumber() TxID {
 	return s.txNum
 }
 
+// undo Replace the specified data value with the value saved in the log record.
+// The method pins a buffer to the specified block,
+// calls setInt to restore the saved value, and unpins the buffer.
 func (s *SetIntRecord) undo(tx *Transaction) error {
 	tx.Pin(s.block)
 	err := tx.SetInt(s.block, s.offset, s.val, false)
@@ -298,6 +328,11 @@ func (s *SetIntRecord) String() string {
 	return fmt.Sprintf("<SETINT %v %v %v %v>", s.txNum, s.block, s.offset, s.val)
 }
 
+// writeSetIntRecToLog write a SetInt record to the log.
+// This log record contains the SetInt operator,
+// followed by transaction id, filename, blockNumber,
+// offset of the modified block, and the previous integer value at that offset.
+// returns the LSN of the appended SetInt record
 func writeSetIntRecToLog(log *wal.Log, txNum TxID, block file.Block, offset int64, val int) int64 {
 	errMsg := "Failed to write SetInt record to Log: "
 	filenameLen := file.MaxLen(len(block.Filename))
@@ -345,6 +380,8 @@ func writeSetIntRecToLog(log *wal.Log, txNum TxID, block file.Block, offset int6
 
 /*************** SetStringRecord *********************************************/
 
+// SetStringRecord in log ->
+// <SetString, TxID, filename, blockNumber, offset, value>
 type SetStringRecord struct {
 	txNum  TxID
 	offset int64
@@ -400,6 +437,9 @@ func (s *SetStringRecord) txNumber() TxID {
 	return s.txNum
 }
 
+// undo Replace the specified data value with the value saved in the log record.
+// The method pins a buffer to the specified block,
+// calls SetString to restore the saved value, and unpins the buffer.
 func (s *SetStringRecord) undo(tx *Transaction) error {
 	tx.Pin(s.block)
 	err := tx.SetString(s.block, s.offset, s.val, false)
@@ -414,6 +454,11 @@ func (s *SetStringRecord) String() string {
 	return fmt.Sprintf("<SETSTRING %v %v %v %v>", s.txNum, s.block, s.offset, s.val)
 }
 
+// writeSetStringRecToLog write a SetString record to the log.
+// This log record contains the SetString operator,
+// followed by transaction id, filename, blockNumber,
+// offset of the modified block, and the previous string value at that offset.
+// returns the LSN of the appended SetInt record
 func writeSetStringRecToLog(log *wal.Log, txNum TxID, block file.Block, offset int64, val string) int64 {
 	errMsg := "Failed to write SetString record to Log: "
 	filenameLen := file.MaxLen(len(block.Filename))

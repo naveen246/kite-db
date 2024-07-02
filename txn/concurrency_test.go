@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+// 3 Goroutines try to access 2 blocks. Each goroutine creates a transaction.
+// Txn A tries to read block1 and block2
+// Txn B tries to write to block2 and read block1
+// Txn C tries to write to block1 and read block2
 func TestConcurrency(t *testing.T) {
 	db := server.NewDB(dbDir, blockTestSize, 8)
 	createFile(db.FileMgr, filename)
@@ -28,6 +32,8 @@ func TestConcurrency(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
+	// Tx A: reads block1 (GetInt), then after a delay reads block2 (GetInt)
+	// Tx A is the oldest transaction so it will never be aborted if some other Txn is holding the lock
 	go func(txA *txn.Transaction) {
 		defer wg.Done()
 		txA.Pin(block1)
@@ -51,6 +57,7 @@ func TestConcurrency(t *testing.T) {
 	}(txA)
 
 	wg.Add(1)
+	// Tx B: writes to block2 (SetInt), then after a delay reads block1 (GetInt)
 	go func(txB *txn.Transaction) {
 		defer wg.Done()
 		txB.Pin(block1)
@@ -75,8 +82,9 @@ func TestConcurrency(t *testing.T) {
 
 	wg.Add(1)
 
-	// txC is the youngest transaction so it will be rolled back when it does not get a lock
-	// after rollback the txn is tried again after some delay
+	// Tx C: after an initial delay writes to block1 (SetInt). then reads block2 (GetInt)
+	// Tx C is the youngest transaction so it will be rolled back when it does not get a lock,
+	// after rollback the txn is tried again
 	go func(txC *txn.Transaction) {
 		defer wg.Done()
 		// for loop to retry txn when txn is rolled back
