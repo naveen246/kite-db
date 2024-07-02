@@ -1,19 +1,20 @@
-package loghandler
+package wal
 
 import (
 	"github.com/naveen246/kite-db/file"
+	log2 "log"
 )
 
 // LogIterator provides the ability to move from latest to oldest log record
-// This becomes easy since data is appended in reverse order in each block of the logFile
+// This becomes easy since data is appended in reverse order in each block of the LogFile
 type LogIterator struct {
-	fileMgr    file.FileMgr
+	fileMgr    *file.FileMgr
 	block      file.Block
 	page       *file.Page
 	currentPos int64
 }
 
-func NewIterator(fileMgr file.FileMgr, block file.Block) *LogIterator {
+func NewIterator(fileMgr *file.FileMgr, block file.Block) *LogIterator {
 	page := file.NewPageWithSize(fileMgr.BlockSize)
 	iter := &LogIterator{
 		fileMgr: fileMgr,
@@ -48,6 +49,9 @@ func (l *LogIterator) Next() []byte {
 // moveToBlock Moves to the specified log block
 // and positions it at the first record in that block
 func (l *LogIterator) moveToBlock(block file.Block) {
-	l.fileMgr.Read(block, l.page)
+	err := l.fileMgr.Read(block, l.page)
+	if err != nil {
+		log2.Fatalln("Failed to moveToBlock", err)
+	}
 	l.currentPos, _ = l.page.GetInt(0)
 }

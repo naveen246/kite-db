@@ -1,18 +1,19 @@
-package loghandler
+package wal
 
 import (
 	"github.com/naveen246/kite-db/common"
 	"github.com/naveen246/kite-db/file"
-	"log"
-	"sync"
+	"github.com/sasha-s/go-deadlock"
+	log2 "log"
+	"sync/atomic"
 )
 
 /*
 A Log keeps track of any changes in the database so that the change can be reversed.
-Each change is stored as a logRecord(byte slice) in a logFile.
-New logRecords are appended to the end of the logFile.
+Each change is stored as a logRecord(byte slice) in a LogFile.
+New logRecords are appended to the end of the LogFile.
 
-Data is appended in reverse order in each block of the logFile
+Data is appended in reverse order in each block of the LogFile
 Below is an example of how the log sequence numbers would look when we append 15 items
 +-------------+--------------------+---------------------+
 | 3, 2, 1, 0  |  9, 8, 7, 6, 5, 4  |  14, 13, 12, 11, 10 |
@@ -20,7 +21,7 @@ Below is an example of how the log sequence numbers would look when we append 15
 | Block 0     |  Block 1           |  Block 2            |
 +-------------+--------------------+---------------------+
 
-logFile is read from latest to oldest data as follows,
+LogFile is read from latest to oldest data as follows,
 Block 2 is read first (14-10)
 Block 1 is read next (9-4)
 Block 0 is read next (3-0)
@@ -44,59 +45,59 @@ The first 8 bytes of all blocks are reserved for the position/offset of the last
 0               8          16                 24            29                37           40
 */
 
-// LogMgr is responsible for writing log records into a log file.
-// New records are appended to memory(logPage) and flushed to disk(logFile) when needed
-type LogMgr struct {
-	sync.Mutex
-	fileMgr      file.FileMgr
-	logFile      string
+// Log is responsible for writing log records into a log file.
+// New records are appended to memory(logPage) and flushed to disk(LogFile) when needed
+type Log struct {
+	deadlock.Mutex
+	fileMgr      *file.FileMgr
+	LogFile      string
 	currentBlock file.Block
 	logPage      *file.Page
 
 	// latestLogSeqNum is incremented every time logRecord is written to logPage
-	latestLogSeqNum int
+	latestLogSeqNum atomic.Int64
 
 	// lastSavedLogSeqNum is updated to latestLogSeqNum when the logPage is flushed to disk
-	lastSavedLogSeqNum int
+	lastSavedLogSeqNum atomic.Int64
 }
 
-// NewLogMgr creates manager for specified logFile
-// if logFile does not exist, create file with an empty first block
-func NewLogMgr(fileMgr file.FileMgr, logFile string) *LogMgr {
+// NewLog creates manager for specified LogFile
+// if LogFile does not exist, create file with an empty first block
+func NewLog(fileMgr *file.FileMgr, logFile string) *Log {
 	page := file.NewPageWithSize(fileMgr.BlockSize)
-	logMgr := &LogMgr{
+	log := &Log{
 		fileMgr: fileMgr,
-		logFile: logFile,
+		LogFile: logFile,
 		logPage: page,
 	}
 
 	blockCount := fileMgr.BlockCount(logFile)
 	if blockCount == 0 {
-		// logFile is a new file so we append new block to file
-		logMgr.currentBlock = logMgr.appendNewBlock()
+		// LogFile is a new file so we append new block to file
+		log.currentBlock = log.appendNewBlock()
 	} else {
-		// logFile is an existing file so we get the last block of the file
+		// LogFile is an existing file so we get the last block of the file
 		// and read the last block contents to logPage
-		logMgr.currentBlock = file.GetBlock(logFile, blockCount-1)
-		err := fileMgr.Read(logMgr.currentBlock, logMgr.logPage)
+		log.currentBlock = file.GetBlock(logFile, blockCount-1)
+		err := fileMgr.Read(log.currentBlock, log.logPage)
 		if err != nil {
-			log.Fatalf("Read failed for block %v - %v\n", logMgr.currentBlock, err)
+			log2.Fatalf("Read failed for block %v - %v\n", log.currentBlock, err)
 		}
 	}
 
-	return logMgr
+	return log
 }
 
-// Append logRecord to logPage(memory)
+// Append logRecord to logPage(memory), returns logSeqNumber of the appended record
 // Log records are written right to left in the logPage.
 // Storing the records backwards makes it easy to read latest records first.
-func (l *LogMgr) Append(logRecord []byte) int {
+func (l *Log) Append(logRecord []byte) int64 {
 	l.Lock()
 	defer l.Unlock()
 
 	lastRecordPos, err := l.lastRecordPos()
 	if err != nil {
-		return l.latestLogSeqNum
+		return l.latestLogSeqNum.Load()
 	}
 	bytesNeeded := len(logRecord) + file.IntSize
 
@@ -113,37 +114,37 @@ func (l *LogMgr) Append(logRecord []byte) int {
 	recordPos := lastRecordPos - int64(bytesNeeded)
 	err = l.logPage.SetBytes(recordPos, logRecord)
 	if err != nil {
-		log.Fatalf("Failed to write Log record to page - %v\n", err)
+		log2.Fatalf("Failed to write Log record to page - %v\n", err)
 	}
 
 	l.saveLastRecordPos(recordPos)
-	l.latestLogSeqNum++
-	return l.latestLogSeqNum
+	l.latestLogSeqNum.Add(1)
+	return l.latestLogSeqNum.Load()
 }
 
-func (l *LogMgr) appendNewBlock() file.Block {
-	block, err := l.fileMgr.Append(l.logFile)
+func (l *Log) appendNewBlock() file.Block {
+	block, err := l.fileMgr.Append(l.LogFile)
 	if err != nil {
-		log.Fatalf("Failed to create new block in file %v - %v\n", l.logFile, err)
+		log2.Fatalf("Failed to create new block in file %v - %v\n", l.LogFile, err)
 	}
 
 	l.saveLastRecordPos(l.fileMgr.BlockSize)
 	err = l.fileMgr.Write(block, l.logPage)
 	if err != nil {
-		log.Fatalf("Failed to write page to newly created block in file %v - %v\n", l.logFile, err)
+		log2.Fatalf("Failed to write page to newly created block in file %v - %v\n", l.LogFile, err)
 	}
 	return block
 }
 
 // The first 8 bytes of page holds the position of last written record
-func (l *LogMgr) saveLastRecordPos(pos int64) {
+func (l *Log) saveLastRecordPos(pos int64) {
 	err := l.logPage.SetInt(0, pos)
 	if err != nil {
-		log.Fatalf("Failed to save last record position - %v", err)
+		log2.Fatalf("Failed to save last record position - %v", err)
 	}
 }
 
-func (l *LogMgr) lastRecordPos() (int64, error) {
+func (l *Log) lastRecordPos() (int64, error) {
 	lastRecordPos, err := l.logPage.GetInt(0)
 	if err != nil {
 		return 0, err
@@ -151,22 +152,27 @@ func (l *LogMgr) lastRecordPos() (int64, error) {
 	return lastRecordPos, nil
 }
 
-func (l *LogMgr) flush() {
+func (l *Log) flush() {
 	err := l.fileMgr.Write(l.currentBlock, l.logPage)
 	if err != nil {
-		log.Fatalf("Failed to flush to file %v - %v\n", l.logFile, err)
+		log2.Fatalf("Failed to flush to file %v - %v\n", l.LogFile, err)
 	}
-	l.lastSavedLogSeqNum = l.latestLogSeqNum
+	l.lastSavedLogSeqNum.Store(l.latestLogSeqNum.Load())
 }
 
 // Flush ensures that log record corresponding to logSeqNum is written to disk
-func (l *LogMgr) Flush(logSeqNum int) {
-	if logSeqNum > l.lastSavedLogSeqNum {
+func (l *Log) Flush(logSeqNum int64) {
+	l.Lock()
+	defer l.Unlock()
+	lastSavedLogSeqNum := l.lastSavedLogSeqNum.Load()
+	if logSeqNum > lastSavedLogSeqNum {
 		l.flush()
 	}
 }
 
-func (l *LogMgr) Iterator() common.Iterator {
+func (l *Log) Iterator() common.Iterator {
+	l.Lock()
+	defer l.Unlock()
 	l.flush()
 	return NewIterator(l.fileMgr, l.currentBlock)
 }

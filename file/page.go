@@ -109,8 +109,8 @@ func (p *Page) SetString(offset int64, value string) error {
 	return p.SetBytes(offset, []byte(value))
 }
 
-func (p *Page) MaxLen(strLen int) int {
-	return IntSize + strLen
+func MaxLen(strLen int) int64 {
+	return IntSize + int64(strLen)
 }
 
 func Int64ToBytes(value int64) []byte {
