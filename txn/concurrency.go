@@ -19,7 +19,7 @@ var lockTbl *lockTable
 var once sync.Once
 
 type lockTable struct {
-	mu    deadlock.RWMutex
+	mu    deadlock.Mutex
 	locks map[file.Block][]txLock
 }
 
@@ -36,69 +36,63 @@ func (l *lockTable) sLock(block file.Block, txNum TxID) error {
 	for {
 		otherTxHasXLock := false
 		hasOlderTx := false
-		l.mu.RLock()
-		txLocks := make([]txLock, len(l.locks[block]))
-		copy(txLocks, l.locks[block])
-		l.mu.RUnlock()
-		for _, txLock := range txLocks {
-			if txLock.lkType == exclusiveLock {
+		l.mu.Lock()
+		for _, txLck := range l.locks[block] {
+			if txLck.txId == txNum {
+				continue
+			}
+			if txLck.lkType == exclusiveLock {
 				otherTxHasXLock = true
 			}
-			if txLock.txId < txNum {
+			if txLck.txId < txNum {
 				hasOlderTx = true
 			}
 		}
 
 		if !otherTxHasXLock {
-			break
+			l.locks[block] = append(l.locks[block], txLock{
+				txId:   txNum,
+				lkType: sharedLock,
+			})
+			l.mu.Unlock()
+			return nil
 		} else if hasOlderTx {
+			l.mu.Unlock()
 			return ErrLockAbort
 		}
+		l.mu.Unlock()
 	}
-
-	l.mu.Lock()
-	l.locks[block] = append(l.locks[block], txLock{
-		txId:   txNum,
-		lkType: sharedLock,
-	})
-	l.mu.Unlock()
-	return nil
 }
 
 func (l *lockTable) xLock(block file.Block, txNum TxID) error {
-
 	// Wait-die locking rule for deadlock avoidance
 	for {
 		otherTxHasAnyLock := false
 		hasOlderTx := false
-		l.mu.RLock()
-		txLocks := make([]txLock, len(l.locks[block]))
-		copy(txLocks, l.locks[block])
-		l.mu.RUnlock()
-		for _, txLock := range txLocks {
-			if txLock.txId != txNum {
-				otherTxHasAnyLock = true
+		l.mu.Lock()
+		for _, txLck := range l.locks[block] {
+			if txLck.txId == txNum {
+				continue
 			}
-			if txLock.txId < txNum {
+			otherTxHasAnyLock = true
+			if txLck.txId < txNum {
 				hasOlderTx = true
 			}
 		}
 
 		if !otherTxHasAnyLock {
-			break
-		}
-		if hasOlderTx {
+			l.locks[block] = append(l.locks[block], txLock{
+				txId:   txNum,
+				lkType: exclusiveLock,
+			})
+			l.mu.Unlock()
+			return nil
+		} else if hasOlderTx {
+			l.mu.Unlock()
 			return ErrLockAbort
 		}
+		l.mu.Unlock()
 	}
-
-	l.mu.Lock()
-	l.locks[block] = append(l.locks[block], txLock{
-		txId:   txNum,
-		lkType: exclusiveLock,
-	})
-	l.mu.Unlock()
-	return nil
 }
 
 func (l *lockTable) unlock(block file.Block, txNum TxID) {

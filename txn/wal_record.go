@@ -50,25 +50,25 @@ func createLogRecord(bytes []byte) LogRecord {
 type CheckpointRecord struct {
 }
 
-func newCheckpointRecord() CheckpointRecord {
-	return CheckpointRecord{}
+func newCheckpointRecord() *CheckpointRecord {
+	return &CheckpointRecord{}
 }
 
-func (c CheckpointRecord) recordType() int {
+func (c *CheckpointRecord) recordType() int {
 	return CheckPoint
 }
 
 // Checkpoint records have no associated transaction,
 // and so the method returns a "dummy", negative txid.
-func (c CheckpointRecord) txNumber() TxID {
+func (c *CheckpointRecord) txNumber() TxID {
 	return -1
 }
 
-func (c CheckpointRecord) undo(tx *Transaction) error {
+func (c *CheckpointRecord) undo(tx *Transaction) error {
 	return nil
 }
 
-func (c CheckpointRecord) String() string {
+func (c *CheckpointRecord) String() string {
 	return "<CHECKPOINT>"
 }
 
@@ -88,29 +88,29 @@ type StartRecord struct {
 	txNum TxID
 }
 
-func newStartRecord(page *file.Page) StartRecord {
+func newStartRecord(page *file.Page) *StartRecord {
 	txNumber, err := page.GetInt(file.IntSize)
 	if err != nil {
 		log2.Fatalln("Failed to create start record: ", err)
 	}
-	return StartRecord{
+	return &StartRecord{
 		txNum: TxID(txNumber),
 	}
 }
 
-func (s StartRecord) recordType() int {
+func (s *StartRecord) recordType() int {
 	return Start
 }
 
-func (s StartRecord) txNumber() TxID {
+func (s *StartRecord) txNumber() TxID {
 	return s.txNum
 }
 
-func (s StartRecord) undo(tx *Transaction) error {
+func (s *StartRecord) undo(tx *Transaction) error {
 	return nil
 }
 
-func (s StartRecord) String() string {
+func (s *StartRecord) String() string {
 	return fmt.Sprintf("<START %v>", s.txNum)
 }
 
@@ -136,29 +136,29 @@ type CommitRecord struct {
 	txNum TxID
 }
 
-func newCommitRecord(page *file.Page) CommitRecord {
+func newCommitRecord(page *file.Page) *CommitRecord {
 	txNumber, err := page.GetInt(file.IntSize)
 	if err != nil {
 		log2.Fatalln("Failed to create commit record: ", err)
 	}
-	return CommitRecord{
+	return &CommitRecord{
 		txNum: TxID(txNumber),
 	}
 }
 
-func (c CommitRecord) recordType() int {
+func (c *CommitRecord) recordType() int {
 	return Commit
 }
 
-func (c CommitRecord) txNumber() TxID {
+func (c *CommitRecord) txNumber() TxID {
 	return c.txNum
 }
 
-func (c CommitRecord) undo(tx *Transaction) error {
+func (c *CommitRecord) undo(tx *Transaction) error {
 	return nil
 }
 
-func (c CommitRecord) String() string {
+func (c *CommitRecord) String() string {
 	return fmt.Sprintf("<COMMIT %v>", c.txNum)
 }
 
@@ -184,29 +184,29 @@ type RollbackRecord struct {
 	txNum TxID
 }
 
-func newRollbackRecord(page *file.Page) RollbackRecord {
+func newRollbackRecord(page *file.Page) *RollbackRecord {
 	txNumber, err := page.GetInt(file.IntSize)
 	if err != nil {
 		log2.Fatalln("Failed to create Rollback record: ", err)
 	}
-	return RollbackRecord{
+	return &RollbackRecord{
 		txNum: TxID(txNumber),
 	}
 }
 
-func (r RollbackRecord) recordType() int {
+func (r *RollbackRecord) recordType() int {
 	return Rollback
 }
 
-func (r RollbackRecord) txNumber() TxID {
+func (r *RollbackRecord) txNumber() TxID {
 	return r.txNum
 }
 
-func (r RollbackRecord) undo(tx *Transaction) error {
+func (r *RollbackRecord) undo(tx *Transaction) error {
 	return nil
 }
 
-func (r RollbackRecord) String() string {
+func (r *RollbackRecord) String() string {
 	return fmt.Sprintf("<ROLLBACK %v>", r.txNum)
 }
 
@@ -236,7 +236,7 @@ type SetIntRecord struct {
 	block  file.Block
 }
 
-func newSetIntRecord(page *file.Page) SetIntRecord {
+func newSetIntRecord(page *file.Page) *SetIntRecord {
 	errMsg := "Failed to create SetInt record: "
 	position := int64(file.IntSize)
 	txNumber, err := page.GetInt(position)
@@ -268,7 +268,7 @@ func newSetIntRecord(page *file.Page) SetIntRecord {
 		log2.Fatalln(errMsg, err)
 	}
 
-	return SetIntRecord{
+	return &SetIntRecord{
 		txNum:  TxID(txNumber),
 		offset: offset,
 		val:    int(val),
@@ -276,15 +276,15 @@ func newSetIntRecord(page *file.Page) SetIntRecord {
 	}
 }
 
-func (s SetIntRecord) recordType() int {
+func (s *SetIntRecord) recordType() int {
 	return SetInt
 }
 
-func (s SetIntRecord) txNumber() TxID {
+func (s *SetIntRecord) txNumber() TxID {
 	return s.txNum
 }
 
-func (s SetIntRecord) undo(tx *Transaction) error {
+func (s *SetIntRecord) undo(tx *Transaction) error {
 	tx.Pin(s.block)
 	err := tx.SetInt(s.block, s.offset, s.val, false)
 	if err != nil {
@@ -294,7 +294,7 @@ func (s SetIntRecord) undo(tx *Transaction) error {
 	return nil
 }
 
-func (s SetIntRecord) String() string {
+func (s *SetIntRecord) String() string {
 	return fmt.Sprintf("<SETINT %v %v %v %v>", s.txNum, s.block, s.offset, s.val)
 }
 
@@ -352,7 +352,7 @@ type SetStringRecord struct {
 	block  file.Block
 }
 
-func newSetStringRecord(page *file.Page) SetStringRecord {
+func newSetStringRecord(page *file.Page) *SetStringRecord {
 	errMsg := "Failed to create SetString record: "
 	position := int64(file.IntSize)
 	txNumber, err := page.GetInt(position)
@@ -384,7 +384,7 @@ func newSetStringRecord(page *file.Page) SetStringRecord {
 		log2.Fatalln(errMsg, err)
 	}
 
-	return SetStringRecord{
+	return &SetStringRecord{
 		txNum:  TxID(txNumber),
 		offset: offset,
 		val:    val,
@@ -392,15 +392,15 @@ func newSetStringRecord(page *file.Page) SetStringRecord {
 	}
 }
 
-func (s SetStringRecord) recordType() int {
+func (s *SetStringRecord) recordType() int {
 	return SetString
 }
 
-func (s SetStringRecord) txNumber() TxID {
+func (s *SetStringRecord) txNumber() TxID {
 	return s.txNum
 }
 
-func (s SetStringRecord) undo(tx *Transaction) error {
+func (s *SetStringRecord) undo(tx *Transaction) error {
 	tx.Pin(s.block)
 	err := tx.SetString(s.block, s.offset, s.val, false)
 	if err != nil {
@@ -410,7 +410,7 @@ func (s SetStringRecord) undo(tx *Transaction) error {
 	return nil
 }
 
-func (s SetStringRecord) String() string {
+func (s *SetStringRecord) String() string {
 	return fmt.Sprintf("<SETSTRING %v %v %v %v>", s.txNum, s.block, s.offset, s.val)
 }
 

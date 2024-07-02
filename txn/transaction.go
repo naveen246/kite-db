@@ -6,6 +6,7 @@ import (
 	"github.com/naveen246/kite-db/wal"
 	"github.com/sasha-s/go-deadlock"
 	"log"
+	"time"
 )
 
 const EndOfFile = -1
@@ -20,7 +21,7 @@ var nextTxNum struct {
 func nextTxNumber() TxID {
 	nextTxNum.Lock()
 	defer nextTxNum.Unlock()
-	nextTxNum.txID++
+	nextTxNum.txID = TxID(time.Now().UnixNano())
 	return nextTxNum.txID
 }
 
