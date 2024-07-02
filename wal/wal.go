@@ -38,11 +38,11 @@ The first 8 bytes of all blocks are reserved for the position/offset of the last
 +===============+==========+==================+=============+=================+============+
 | lastRecordPos |  empty   | len(secondValue) | secondValue | len(firstValue) | firstValue |
 +===============+==========+==================+=============+=================+============+
-| 14            |          | 5                | defgh       | 3               | abc        |
+| 16            |          | 5                | defgh       | 3               | abc        |
 +---------------+----------+------------------+-------------+-----------------+------------+
 | 8 bytes       | 8 bytes  | 8 bytes          | 5 bytes     | 8 bytes         | 3 bytes    |
 +---------------+----------+------------------+-------------+-----------------+------------+
-
+0               8          16                 24            29                37           40
 */
 
 // Log is responsible for writing log records into a log file.

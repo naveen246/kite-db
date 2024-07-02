@@ -11,6 +11,29 @@ import (
 	"time"
 )
 
+/*
+BufferMgr manages access to the buffer pages in the Bufferpool.
+Bufferpool is an in-memory cache of buffer-pages to store data read from disk
+
+When a client wants to access a disk-block the following steps take place
+- The client sends a request to buffer manager.
+- The buffer manager selects a buffer-page from the Bufferpool.
+- The contents of the disk-block is read(if needed) to the selected buffer-page and the page is returned to the client.
+	At this point the buffer-page is said to be pinned to the disk-block by the client.
+- The client reads/writes data to the buffer-page(in-memory)
+- Once its usage is done, the client requests the buffer manager to unpin the buffer-page
+
+When a client requests a buffer manager for accessing a disk-block
+- If a buffer-page holding the contents of the disk-block is present in Bufferpool:
+	We use a map "allocatedBuffers" that maps a block to a buffer-page
+	The buffer manager checks the map and returns the page if a corresponding buffer-page is present.
+- If a buffer-page holding the contents of the disk-block is not present in Bufferpool and at least one unpinned buffer-page is present:
+	We have to pick a buffer-page from the list of unpinned buffer-pages. This can be done using LRU, LFU and other strategies
+	LRU is implemented using a slice "unpinnedBuffers".
+	When a buffer's pin count becomes 0(no longer used by any client), we add the buffer-page to the tail-end of the slice.
+	Whenever a buffer is needed, the Least Recently Used buffer-page is present at the head of the list so remove the buffer-page at the head of the list and use it.
+*/
+
 // BufferPool Manages the pinning and unpinning of buffers to blocks.
 type BufferPool struct {
 	deadlock.Mutex
