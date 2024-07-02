@@ -25,6 +25,9 @@ func nextTxNumber() TxID {
 	return nextTxNum.txID
 }
 
+// Transaction Provide transaction management for clients,
+// ensuring that all transactions are serializable, recoverable,
+// and in general satisfy the ACID properties.
 type Transaction struct {
 	TxNum       TxID
 	bufferPool  *buffer.BufferPool
@@ -45,12 +48,20 @@ func NewTransaction(fileMgr *file.FileMgr, log *wal.Log, bufferPool *buffer.Buff
 	return tx
 }
 
+// Commit the current transaction.
+// Flush all modified buffers (and their log records),
+// write and flush a Commit record to the log,
+// release all locks, and unpin any pinned buffers.
 func (tx *Transaction) Commit() {
 	tx.recoveryMgr.commit()
 	tx.ReleaseLocks()
 	tx.buffers.unpinAll()
 }
 
+// Rollback the current transaction.
+// Undo any modified values, flush those buffers,
+// write and flush a Rollback record to the log,
+// release all locks, and unpin any pinned buffers.
 func (tx *Transaction) Rollback() error {
 	err := tx.recoveryMgr.rollback()
 	if err != nil {
@@ -61,6 +72,9 @@ func (tx *Transaction) Rollback() error {
 	return nil
 }
 
+// Recover Flush all modified buffers.
+// Then go through the log, rolling back all uncommitted transactions.
+// Finally, write a checkpoint record to the log.
 func (tx *Transaction) Recover() error {
 	tx.bufferPool.FlushAll(int64(tx.TxNum))
 	err := tx.recoveryMgr.recover()
@@ -74,14 +88,19 @@ func (tx *Transaction) ReleaseLocks() {
 	tx.concurMgr.releaseLocks(tx.TxNum)
 }
 
+// Pin the specified block. The transaction manages the buffer for the client.
 func (tx *Transaction) Pin(block file.Block) {
 	tx.buffers.pin(block)
 }
 
+// Unpin the specified block.
+// The transaction looks up the buffer pinned to this block, and unpins it.
 func (tx *Transaction) Unpin(block file.Block) {
 	tx.buffers.unpin(block)
 }
 
+// GetInt Return the integer value stored at the specified offset of the specified block.
+// The method first obtains an sLock on the block, then it calls the buffer to retrieve the value.
 func (tx *Transaction) GetInt(block file.Block, offset int) (int, error) {
 	err := tx.concurMgr.sLock(block, tx.TxNum)
 	if err != nil {
@@ -97,6 +116,8 @@ func (tx *Transaction) GetInt(block file.Block, offset int) (int, error) {
 	return int(val), nil
 }
 
+// GetString Return the string value stored at the specified offset of the specified block.
+// The method first obtains an sLock on the block, then it calls the buffer to retrieve the value.
 func (tx *Transaction) GetString(block file.Block, offset int) (string, error) {
 	err := tx.concurMgr.sLock(block, tx.TxNum)
 	if err != nil {
@@ -112,6 +133,11 @@ func (tx *Transaction) GetString(block file.Block, offset int) (string, error) {
 	return val, nil
 }
 
+// SetInt Store an integer at the specified offset of the specified block.
+// The method first obtains an xLock on the block.
+// It then reads the current value at that offset,
+// puts it into an update log record, and writes that record to the log.
+// Finally, it calls the buffer to store the value, passing in the LSN of the log record and the transaction's id.
 func (tx *Transaction) SetInt(block file.Block, offset int64, val int, okToLog bool) error {
 	err := tx.concurMgr.xLock(block, tx.TxNum)
 	if err != nil {
@@ -133,6 +159,11 @@ func (tx *Transaction) SetInt(block file.Block, offset int64, val int, okToLog b
 	return nil
 }
 
+// SetString Store a string at the specified offset of the specified block.
+// The method first obtains an xLock on the block.
+// It then reads the current value at that offset,
+// puts it into an update log record, and writes that record to the log.
+// Finally, it calls the buffer to store the value, passing in the LSN of the log record and the transaction's id.
 func (tx *Transaction) SetString(block file.Block, offset int64, val string, okToLog bool) error {
 	err := tx.concurMgr.xLock(block, tx.TxNum)
 	if err != nil {
@@ -158,6 +189,9 @@ func (tx *Transaction) AvailableBuffers() int {
 	return tx.bufferPool.Available()
 }
 
+// Size Return the number of blocks in the specified file.
+// This method first obtains an sLock on the "end of the file" (eofBlock),
+// before asking the file manager to return the BlockCount.
 func (tx *Transaction) Size(filename string) (int, error) {
 	eofBlock := file.GetBlock(filename, EndOfFile)
 	err := tx.concurMgr.sLock(eofBlock, tx.TxNum)
@@ -168,6 +202,8 @@ func (tx *Transaction) Size(filename string) (int, error) {
 	return int(tx.fileMgr.BlockCount(filename)), nil
 }
 
+// Append a new block to the end of the specified file and returns a reference to it.
+// This method first obtains an xLock on the "end of the file" (eofBlock), before performing the append.
 func (tx *Transaction) Append(filename string) (file.Block, error) {
 	eofBlock := file.GetBlock(filename, EndOfFile)
 	err := tx.concurMgr.xLock(eofBlock, tx.TxNum)
