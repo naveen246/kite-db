@@ -16,7 +16,7 @@ type txLock struct {
 }
 
 var lockTbl *lockTable
-var once sync.Once
+var once *sync.Once
 
 // The lock table, which provides methods to lock and unlock blocks.
 // All txns share the same common lockTable
@@ -25,6 +25,7 @@ type lockTable struct {
 	locks map[file.Block][]txLock
 }
 
+// lockTable is initialized only once per DB instance
 func getLockTable() *lockTable {
 	once.Do(func() {
 		lockTbl = &lockTable{
@@ -32,6 +33,10 @@ func getLockTable() *lockTable {
 		}
 	})
 	return lockTbl
+}
+
+func ResetLockTable() {
+	once = new(sync.Once)
 }
 
 // sLock - Grants sharedLock on the specified block

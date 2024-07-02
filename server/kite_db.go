@@ -21,6 +21,7 @@ func NewDB(dbDir string, blockSize int64, bufferCount int) *DB {
 	fileMgr := file.NewFileMgr(dbDir, blockSize)
 	log := wal.NewLog(fileMgr, logFile)
 	bufferPool := buffer.NewBufferPool(fileMgr, log, bufferCount)
+	txn.ResetLockTable()
 	return &DB{
 		FileMgr: fileMgr,
 		Log:     log,
