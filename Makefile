@@ -13,7 +13,7 @@ test: build
 
 test_coverage:
 	go test -coverprofile=coverage.out ./...; \
-    go tool cover -html="coverage.out"
+	go tool cover -html="coverage.out"
 
 lint:
 	golangci-lint run

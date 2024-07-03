@@ -27,7 +27,7 @@ func (r *RecoveryMgr) commit() {
 }
 
 // rollback Write a rollback record to the log and flush it to disk.
-// rollback the transaction, by iterating through the log records until it finds the transaction's START record,
+// rollback the transaction, by iterating through the log records until it finds the transaction's Start record,
 // calling undo() for each of the transaction's log records.
 func (r *RecoveryMgr) rollback() error {
 	iter := r.log.Iterator()
