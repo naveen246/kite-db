@@ -1,7 +1,7 @@
 
 <h3>KiteDB</h3>
 
-SQL Database being built in Go.
+Database being written in Go (for learning).
 
 <h4>References:</h4>
 
