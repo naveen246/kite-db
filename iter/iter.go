@@ -1,4 +1,4 @@
-package common
+package iter
 
 type Iterator interface {
 	HasNext() bool

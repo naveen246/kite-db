@@ -1,8 +1,8 @@
 package wal
 
 import (
-	"github.com/naveen246/kite-db/common"
 	"github.com/naveen246/kite-db/file"
+	"github.com/naveen246/kite-db/iter"
 	"github.com/sasha-s/go-deadlock"
 	log2 "log"
 	"sync/atomic"
@@ -170,7 +170,7 @@ func (l *Log) Flush(logSeqNum int64) {
 	}
 }
 
-func (l *Log) Iterator() common.Iterator {
+func (l *Log) Iterator() iter.Iterator {
 	l.Lock()
 	defer l.Unlock()
 	l.flush()
